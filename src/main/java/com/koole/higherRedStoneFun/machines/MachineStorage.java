@@ -112,7 +112,12 @@ public final class MachineStorage {
         // 物品栏
         ConfigurationSection inv = config.createSection(path + ".inventory");
         ItemStack[] contents = machine.contents();
+        int virtualSlot = virtualOutputSlot(machine);
         for (int i = 0; i < contents.length; i++) {
+            // 虚拟输出槽（工作台预览）永不持久化——它不属于机器
+            if (i == virtualSlot) {
+                continue;
+            }
             ItemStack stack = contents[i];
             if (stack == null || stack.getType().isAir()) {
                 continue;
@@ -124,6 +129,18 @@ public final class MachineStorage {
             }
         }
         machine.clearDirty();
+    }
+
+    /**
+     * 该机器的虚拟输出槽下标，没有则返回 -1。
+     *
+     * <p>双保险：即使将来有代码误把预览写进了机器状态，也不会被存进存档。</p>
+     */
+    private static int virtualOutputSlot(MachineInstance machine) {
+        if (!machine.definition().hasRecipes() || !machine.definition().logic().hasVirtualOutput()) {
+            return -1;
+        }
+        return machine.definition().recipeType().outputSlot();
     }
 
     // ------------------------------------------------------------------

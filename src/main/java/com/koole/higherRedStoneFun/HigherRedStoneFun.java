@@ -2,6 +2,7 @@ package com.koole.higherRedStoneFun;
 
 import com.koole.higherRedStoneFun.commands.HrfCommand;
 import com.koole.higherRedStoneFun.content.BasicMachines;
+import com.koole.higherRedStoneFun.content.BootstrapRecipes;
 import com.koole.higherRedStoneFun.content.GeneticsMachines;
 import com.koole.higherRedStoneFun.content.Materials;
 import com.koole.higherRedStoneFun.content.PowerMachines;
@@ -89,11 +90,15 @@ public final class HigherRedStoneFun extends JavaPlugin {
         // 2. 内容注册
         //    顺序很重要：先材料、再机器（机器会同时注册自己的物品）、
         //    最后才是配方——因为配方会引用前面两者的 ID。
-        Materials.register();
-        BasicMachines.register();
+        Materials.register();        BasicMachines.register();
         PowerMachines.register();
         GeneticsMachines.register(geneticsManager);
         Recipes.register();
+
+        // 2a. 引导配方：把科技树的根接到原版工作台上。
+        //     没有这一步，增强工作台（以及它需要的机器框架）就无法获得，
+        //     整个科技树无法启动。
+        BootstrapRecipes.register(this);
 
         // 2b. 自检：确保没有引用不存在的物品 ID（配置写错时报错而不是静默丢失）
         validateContent();

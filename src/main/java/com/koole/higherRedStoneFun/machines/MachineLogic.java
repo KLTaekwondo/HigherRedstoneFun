@@ -1,5 +1,7 @@
 package com.koole.higherRedStoneFun.machines;
 
+import org.bukkit.inventory.ItemStack;
+
 /**
  * 机器行为接口。
  *
@@ -42,6 +44,29 @@ public interface MachineLogic {
      * <p>主要用于工作台刷新结果预览——玩家每放一个材料都要立刻看到能否合成。</p>
      */
     default void onContentsChanged(MachineInstance machine) {
+    }
+
+    /**
+     * 输出槽是否是「虚拟」的——即显示的内容不是机器真实持有的物品。
+     *
+     * <p>手动工作台属于这一类：结果格只是配方预览，材料要在玩家取走时才扣除。
+     * 因此这份预览<b>绝不能被当成真实物品</b>写进机器状态，否则
+     * 「放材料 -> 生成预览 -> 拆机器」就能无限复制产物。</p>
+     *
+     * <p>默认 false（自动机器的输出槽装的是真实产物，需要正常持久化）。</p>
+     */
+    default boolean hasVirtualOutput() {
+        return false;
+    }
+
+    /**
+     * 返回应该显示在输出槽里的预览物品，没有可预览的配方时返回 null。
+     *
+     * <p>只对 {@link #hasVirtualOutput()} 为 true 的机器有意义。
+     * 调用方负责把返回值渲染到界面上，而<b>不是</b>写进机器状态。</p>
+     */
+    default ItemStack previewResult(MachineInstance machine) {
+        return null;
     }
 
     /** 机器界面的标题附加信息。 */

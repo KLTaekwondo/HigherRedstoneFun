@@ -90,18 +90,10 @@ public final class Recipes {
                 .build());
 
         // ---- 材料 ----
-        registry.register(MachineRecipe.builder("craft_machine_frame", RecipeType.ENHANCED_CRAFTING)
-                .input(vanilla(Material.IRON_INGOT, 8))
-                .input(vanilla(Material.COPPER_INGOT, 1))
-                .output(custom("hrf_machine_frame"))
-                .ticks(20)
-                .build());
-
-        registry.register(MachineRecipe.builder("craft_copper_wire", RecipeType.ENHANCED_CRAFTING)
-                .input(vanilla(Material.COPPER_INGOT, 1))
-                .output(custom("hrf_copper_wire", 3))
-                .ticks(20)
-                .build());
+        // 注意：机器框架、铜导线、空样本瓶这三样是「引导物品」，
+        // 它们在【原版工作台】里制作（见 BootstrapRecipes），
+        // 否则科技树的根就是断的——增强工作台本身也需要机器框架。
+        // 这里不再重复登记，避免同一种物品出现两种成本。
 
         registry.register(MachineRecipe.builder("craft_battery_cell", RecipeType.ENHANCED_CRAFTING)
                 .input(vanilla(Material.AMETHYST_SHARD, 4))
@@ -120,8 +112,8 @@ public final class Recipes {
                 .build());
 
         registry.register(MachineRecipe.builder("craft_empty_sample", RecipeType.ENHANCED_CRAFTING)
-                .input(vanilla(Material.GLASS, 3))
-                .output(custom("hrf_empty_sample", 3))
+                .input(vanilla(Material.GLASS, 6))
+                .output(custom("hrf_empty_sample", 6))
                 .ticks(20)
                 .build());
 
@@ -207,9 +199,64 @@ public final class Recipes {
     // 研磨
     // ==================================================================
 
+    /**
+     * 研磨配方。
+     *
+     * <p><b>核心是矿石翻倍</b>：{@code 1 粗矿 -> 2 粉}，而离心机是
+     * {@code 1 粉 -> 1 锭}。于是</p>
+     *
+     * <pre>
+     *   1 粗铁 --研磨--> 2 铁粉 --离心--> 2 铁锭（+副产物）
+     *                      ↑
+     *              相比熔炉 1 粗铁 -> 1 铁锭，产能翻倍
+     * </pre>
+     *
+     * <p>这是模组化科技最经典的早期爽点，也是让玩家第一次觉得
+     * 「这台机器值回票价」的时刻。v0.1 早期版本只支持「锭 -> 粉」，
+     * 基础层因此没有任何直接价值，所有产出都只是下一台机器的零件。</p>
+     */
     private static void registerGrinding() {
         RecipeRegistry registry = RecipeRegistry.get();
 
+        // ---- 矿石翻倍（基础层的核心收益）----
+        registry.register(MachineRecipe.builder("grind_raw_iron", RecipeType.GRINDING)
+                .input(vanilla(Material.RAW_IRON, 1))
+                .output(custom("hrf_iron_dust", 2))
+                .ticks(60)
+                .build());
+
+        registry.register(MachineRecipe.builder("grind_raw_gold", RecipeType.GRINDING)
+                .input(vanilla(Material.RAW_GOLD, 1))
+                .output(custom("hrf_gold_dust", 2))
+                .ticks(60)
+                .build());
+
+        registry.register(MachineRecipe.builder("grind_raw_copper", RecipeType.GRINDING)
+                .input(vanilla(Material.RAW_COPPER, 1))
+                .output(custom("hrf_copper_dust", 2))
+                .ticks(60)
+                .build());
+
+        // 深板岩变种同样适用，避免玩家挖到深层矿石时收益不同
+        registry.register(MachineRecipe.builder("grind_deepslate_iron", RecipeType.GRINDING)
+                .input(vanilla(Material.DEEPSLATE_IRON_ORE, 1))
+                .output(custom("hrf_iron_dust", 2))
+                .ticks(60)
+                .build());
+
+        registry.register(MachineRecipe.builder("grind_deepslate_gold", RecipeType.GRINDING)
+                .input(vanilla(Material.DEEPSLATE_GOLD_ORE, 1))
+                .output(custom("hrf_gold_dust", 2))
+                .ticks(60)
+                .build());
+
+        registry.register(MachineRecipe.builder("grind_deepslate_copper", RecipeType.GRINDING)
+                .input(vanilla(Material.DEEPSLATE_COPPER_ORE, 1))
+                .output(custom("hrf_copper_dust", 2))
+                .ticks(60)
+                .build());
+
+        // ---- 锭 -> 粉（1:1，配合离心机做还原，不是主要收益途径）----
         registry.register(MachineRecipe.builder("grind_iron", RecipeType.GRINDING)
                 .input(vanilla(Material.IRON_INGOT, 1))
                 .output(custom("hrf_iron_dust"))
@@ -240,9 +287,11 @@ public final class Recipes {
                 .ticks(60)
                 .build());
 
+        // 碎石机：圆石 -> 沙 + 概率砾石
         registry.register(MachineRecipe.builder("grind_stone", RecipeType.GRINDING)
                 .input(vanilla(Material.COBBLESTONE, 1))
                 .output(vanilla(Material.SAND, 1))
+                .output(vanilla(Material.GRAVEL, 1), 0.25D)
                 .ticks(40)
                 .build());
 
@@ -348,8 +397,11 @@ public final class Recipes {
                 .ticks(30)
                 .build());
 
+        // 碳粉 -> 煤炭。
+        // 注意：这不是「4 煤换 1 煤」的亏本循环——碳粉是煤炭研磨而来，
+        // 但也是量产碳粉（配合离心/重组）后的压缩出口，因此保持 2:1。
         registry.register(MachineRecipe.builder("smelt_carbon_to_coal", RecipeType.SMELTING)
-                .input(custom("hrf_carbon", 4))
+                .input(custom("hrf_carbon", 2))
                 .output(vanilla(Material.COAL, 1))
                 .ticks(60)
                 .build());
@@ -366,30 +418,50 @@ public final class Recipes {
     // 离心
     // ==================================================================
 
+    /**
+     * 离心配方。
+     *
+     * <p><b>数值原则</b>：离心机是把粉末「还原 + 提纯」的设备，必须做到
+     * <b>输入不断亏本</b>。早期版本写的是「2 粉 -> 1 锭」，而研磨机是
+     * 「1 锭 -> 1 粉」，于是整条 {@code 锭 -> 粉 -> 锭} 是净损耗的闭环，
+     * 玩家建完离心机只会后悔。</p>
+     *
+     * <p>现在的规则：<b>1 粉 -> 1 锭（1:1 无损）</b>，副产物才是真正的收益。
+     * 这样离心机的定位就清晰了——它不是「把锭变多」，而是
+     * 「把便宜的原料变成稀缺资源」（金粒、红石、紫水晶、青金石等）。</p>
+     */
     private static void registerCentrifuge() {
         RecipeRegistry registry = RecipeRegistry.get();
 
+        // 1 粉 -> 1 锭，无损。收益来自副产物。
         registry.register(MachineRecipe.builder("centrifuge_iron_dust", RecipeType.CENTRIFUGE)
-                .input(custom("hrf_iron_dust", 2))
+                .input(custom("hrf_iron_dust", 1))
                 .output(vanilla(Material.IRON_INGOT, 1))
-                .output(vanilla(Material.GOLD_NUGGET, 1), 0.15D)
-                .output(vanilla(Material.REDSTONE, 1), 0.10D)
-                .ticks(120)
+                .output(vanilla(Material.GOLD_NUGGET, 1), 0.20D)
+                .output(vanilla(Material.REDSTONE, 1), 0.15D)
+                .ticks(100)
                 .build());
 
         registry.register(MachineRecipe.builder("centrifuge_gold_dust", RecipeType.CENTRIFUGE)
-                .input(custom("hrf_gold_dust", 2))
+                .input(custom("hrf_gold_dust", 1))
                 .output(vanilla(Material.GOLD_INGOT, 1))
-                .output(vanilla(Material.GLOWSTONE_DUST, 1), 0.20D)
-                .ticks(120)
+                .output(vanilla(Material.GLOWSTONE_DUST, 1), 0.25D)
+                .ticks(100)
+                .build());
+
+        registry.register(MachineRecipe.builder("centrifuge_copper_dust", RecipeType.CENTRIFUGE)
+                .input(custom("hrf_copper_dust", 1))
+                .output(vanilla(Material.COPPER_INGOT, 1))
+                .output(vanilla(Material.REDSTONE, 1), 0.25D)
+                .ticks(100)
                 .build());
 
         registry.register(MachineRecipe.builder("centrifuge_quartz_dust", RecipeType.CENTRIFUGE)
-                .input(custom("hrf_quartz_dust", 2))
+                .input(custom("hrf_quartz_dust", 1))
                 .output(vanilla(Material.QUARTZ, 1))
-                .output(vanilla(Material.AMETHYST_SHARD, 1), 0.12D)
-                .output(vanilla(Material.LAPIS_LAZULI, 1), 0.18D)
-                .ticks(120)
+                .output(vanilla(Material.AMETHYST_SHARD, 1), 0.15D)
+                .output(vanilla(Material.LAPIS_LAZULI, 1), 0.20D)
+                .ticks(100)
                 .build());
 
         registry.register(MachineRecipe.builder("centrifuge_soul_sand", RecipeType.CENTRIFUGE)

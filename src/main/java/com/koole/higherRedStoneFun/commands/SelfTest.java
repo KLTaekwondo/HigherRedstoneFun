@@ -11,6 +11,7 @@ import com.koole.higherRedStoneFun.genetics.Genome;
 import com.koole.higherRedStoneFun.items.ItemRegistry;
 import com.koole.higherRedStoneFun.machines.MachineDefinition;
 import com.koole.higherRedStoneFun.machines.MachineInstance;
+import com.koole.higherRedStoneFun.machines.MachineMenu;
 import com.koole.higherRedStoneFun.machines.MachineRegistry;
 import com.koole.higherRedStoneFun.machines.logic.RecipeMachineLogic;
 import com.koole.higherRedStoneFun.recipes.MachineRecipe;
@@ -62,6 +63,9 @@ public final class SelfTest {
         testCropMapping();
         testMachineLifecycle();
         testPersistence();
+        testCraftingTableSafety();
+        testTechTreeEntryPoint();
+        testEconomyLoops();
 
         for (String line : results) {
             sender.sendMessage(Text.mm(line));
@@ -609,6 +613,282 @@ public final class SelfTest {
         } finally {
             block.setType(original == null ? Material.AIR : original, false);
         }
+    }
+
+    // ------------------------------------------------------------------
+    // 8. 工作台复制漏洞（回归测试）
+    // ------------------------------------------------------------------
+
+    /**
+     * 回归测试：工作台的配方预览绝不能被当成真实物品。
+     *
+     * <p>早期版本的 {@code updatePreview()} 把产物直接写进机器的输出槽，
+     * 而材料只在玩家取走时才扣除。于是「放材料 -> 生成预览 -> 拆机器」
+     * 就能白拿产物，且可无限重复。</p>
+     *
+     * <p>修复后预览只存在于 GUI 层，机器状态里永远没有它。
+     * 这组断言一旦失败，说明复制漏洞又回来了。</p>
+     */
+    private void testCraftingTableSafety() {
+        section("工作台安全性 (防复制)");
+
+        MachineDefinition definition = MachineRegistry.get().get("hrf_enhanced_crafting_table");
+        if (definition == null) {
+            check("增强工作台定义存在", false, "缺失");
+            return;
+        }
+
+        check("工作台被标记为虚拟输出",
+                definition.logic().hasVirtualOutput(), "hasVirtualOutput=true");
+
+        // 动态取一条增强工作台配方，避免测试与具体内容耦合
+        MachineRecipe sample = null;
+        for (MachineRecipe candidate : RecipeRegistry.get().of(RecipeType.ENHANCED_CRAFTING)) {
+            if (!candidate.inputs().isEmpty() && !candidate.outputs().isEmpty()) {
+                sample = candidate;
+                break;
+            }
+        }
+        if (sample == null) {
+            check("存在可测试的工作台配方", false, "注册表为空");
+            return;
+        }
+
+        Location loc = new Location(plugin.getServer().getWorlds().get(0), 3040, 200, 3040);
+        MachineInstance machine = new MachineInstance(loc, definition);
+        int[] inputSlots = definition.recipeType().inputSlots();
+        int outputSlot = definition.recipeType().outputSlot();
+        var logic = definition.logic();
+
+        // 把该配方的输入依次放进输入槽
+        List<ItemStack> inputs = sample.inputs();
+        for (int i = 0; i < inputs.size() && i < inputSlots.length; i++) {
+            machine.setSlot(inputSlots[i], inputs.get(i));
+        }
+
+        ItemStack previewItem = logic.previewResult(machine);
+        check("配方可预览", previewItem != null,
+                previewItem == null ? "无预览（配方 " + sample.id() + "）"
+                        : sample.id() + " -> " + ItemRegistry.get().idOf(previewItem));
+
+        // ---- 核心断言 1：预览不落进机器状态 ----
+        ItemStack stored = machine.getSlot(outputSlot);
+        check("预览未被写入机器输出槽",
+                stored == null || stored.getType().isAir(),
+                stored == null ? "输出槽为空 ✓" : "输出槽被污染: " + stored.getType());
+
+        // ---- 核心断言 2：拆机器时输出槽不掉出任何东西 ----
+        ItemStack fromContents = machine.contents()[outputSlot];
+        check("拆机器时不会掉出预览产物",
+                fromContents == null || fromContents.getType().isAir(),
+                "输出槽无物品");
+
+        // ---- 核心断言 3：取走结果时必须扣除材料 ----
+        if (previewItem != null
+                && logic instanceof com.koole.higherRedStoneFun.machines.logic.CraftingTableLogic table) {
+
+            // 记录放入的材料总量，用于比对
+            int placed = 0;
+            for (int slot : inputSlots) {
+                ItemStack in = machine.getSlot(slot);
+                if (in != null && !in.getType().isAir()) {
+                    placed += in.getAmount();
+                }
+            }
+
+            ItemStack result = table.takeResult(machine);
+            check("取走结果成功", result != null,
+                    result == null ? "结算失败" : ItemRegistry.get().idOf(result));
+
+            int left = 0;
+            for (int slot : inputSlots) {
+                ItemStack in = machine.getSlot(slot);
+                if (in != null && !in.getType().isAir()) {
+                    left += in.getAmount();
+                }
+            }
+            int expectedLeft = placed - sample.inputs().stream()
+                    .mapToInt(ItemStack::getAmount).sum();
+            check("取走后材料被正确扣除",
+                    result != null && left == Math.max(0, expectedLeft),
+                    "放入 " + placed + " -> 剩余 " + left + " (期望 " + Math.max(0, expectedLeft) + ")");
+        }
+
+        // ---- 核心断言 4（最强）：走完整真实路径模拟复制漏洞 ----
+        //
+        // 旧版本的漏洞路径是：
+        //   玩家放材料 -> 点击触发 onContentsChanged()（把预览写进机器输出槽）
+        //              -> 关闭界面触发 flush()（把界面内容写回机器）
+        //              -> 拆机器（掉落全部内容物）
+        // 因此这里必须依次调用这两个方法，而不是只调 previewResult()——
+        // 只调 previewResult() 无法复现旧 bug，测试就是假的。
+        MachineInstance exploit = new MachineInstance(loc, definition);
+        for (int i = 0; i < inputs.size() && i < inputSlots.length; i++) {
+            exploit.setSlot(inputSlots[i], inputs.get(i));
+        }
+
+        // 步骤 1：模拟「玩家点击/放置」触发的预览刷新
+        logic.onContentsChanged(exploit);
+
+        // 步骤 2：模拟「关闭界面」把 GUI 内容写回机器
+        try {
+            MachineMenu menu = new MachineMenu(exploit);
+            menu.refresh();
+            menu.flush();
+        } catch (Exception ex) {
+            check("界面往返无异常", false, ex.toString());
+        }
+
+        // 步骤 3：统计「此时拆掉机器能拿到什么」
+        String wantedOutput = ItemRegistry.get().idOf(sample.outputs().get(0).stack());
+        int outputRecovered = 0;
+        for (ItemStack stack : exploit.contents()) {
+            if (stack == null || stack.getType().isAir()) {
+                continue;
+            }
+            if (wantedOutput != null && wantedOutput.equals(ItemRegistry.get().idOf(stack))) {
+                outputRecovered += stack.getAmount();
+            }
+        }
+        check("拆机器不会白送产物（复制漏洞已封堵）",
+                outputRecovered == 0,
+                wantedOutput == null ? "配方的产出不是自定义物品，跳过"
+                        : "回收 " + wantedOutput + " x" + outputRecovered + " (必须为 0)");
+
+        // 旧版本会在这里报 x1：放材料 -> 预览落进机器 -> 拆掉就白拿一个产物
+
+        // ---- 核心断言 5：预览展示槽本身也不能被 flush 写回 ----
+        MachineInstance clean = new MachineInstance(loc, definition);
+        for (int i = 0; i < inputs.size() && i < inputSlots.length; i++) {
+            clean.setSlot(inputSlots[i], inputs.get(i));
+        }
+        if (logic instanceof com.koole.higherRedStoneFun.machines.logic.CraftingTableLogic table2) {
+            try {
+                MachineMenu menu = new MachineMenu(clean);
+                menu.refresh();                      // 界面会渲染预览
+                ItemStack shown = menu.getInventory().getItem(outputSlot);
+                boolean previewShown = shown != null && !shown.getType().isAir();
+                menu.flush();                        // 关闭界面
+                ItemStack afterFlush = clean.getSlot(outputSlot);
+                check("界面显示的预览不会被写回机器",
+                        !previewShown || afterFlush == null || afterFlush.getType().isAir(),
+                        previewShown ? "界面有预览展示 ✓，flush 后机器输出槽为空 ✓" : "无预览可测");
+            } catch (Exception ex) {
+                check("界面预览写回检查无异常", false, ex.toString());
+            }
+        }
+    }
+
+    // ------------------------------------------------------------------
+    // 9. 科技树入口（回归测试）
+    // ------------------------------------------------------------------
+
+    /**
+     * 回归测试：科技树必须有一个「不依赖自身」的起点。
+     *
+     * <p>早期版本的增强工作台没有任何获取途径，而它自己又需要机器框架，
+     * 机器框架又只能在增强工作台里做——科技树是个死循环，
+     * 玩家只能靠 {@code /hrf give} 开始游戏。</p>
+     */
+    private void testTechTreeEntryPoint() {
+        section("科技树入口");
+
+        // 引导物品必须能通过原版工作台获得
+        for (String id : new String[]{"hrf_machine_frame", "hrf_copper_wire",
+                "hrf_enhanced_crafting_table", "hrf_empty_sample"}) {
+            boolean found = false;
+            var iterator = plugin.getServer().recipeIterator();
+            while (iterator.hasNext()) {
+                var recipe = iterator.next();
+                if (!(recipe instanceof org.bukkit.Keyed keyed)) {
+                    continue;
+                }
+                if (!keyed.getKey().getNamespace().equals(plugin.getName().toLowerCase())) {
+                    continue;
+                }
+                if (!keyed.getKey().getKey().startsWith("vanilla_")) {
+                    continue;
+                }
+                ItemStack result = recipe.getResult();
+                if (id.equals(ItemRegistry.get().idOf(result))) {
+                    found = true;
+                    break;
+                }
+            }
+            check("可由原版工作台制作: " + id, found, found ? "已注册 ✓" : "缺失 ✗");
+        }
+
+        // 增强工作台本身不应依赖「必须在增强工作台里制作」的配方
+        MachineRecipe selfLoop = RecipeRegistry.get().byId("craft_machine_frame");
+        check("机器框架不再依赖增强工作台",
+                selfLoop == null,
+                selfLoop == null ? "已移除该循环配方 ✓" : "仍存在自我循环 ✗");
+    }
+
+    // ------------------------------------------------------------------
+    // 10. 经济闭环（回归测试）
+    // ------------------------------------------------------------------
+
+    /**
+     * 回归测试：核心转换链不能是净亏损。
+     *
+     * <p>早期版本的离心机是「2 粉 -> 1 锭」，而研磨机是「1 锭 -> 1 粉」，
+     * 于是 {@code 锭 -> 粉 -> 锭} 净亏一半，玩家建完离心机只会后悔。</p>
+     */
+    private void testEconomyLoops() {
+        section("经济闭环 (防负收益)");
+
+        RecipeRegistry registry = RecipeRegistry.get();
+
+        // 研磨：1 粗矿 -> 2 粉（矿石翻倍）
+        MachineRecipe rawIron = registry.byId("grind_raw_iron");
+        boolean doubling = false;
+        if (rawIron != null && !rawIron.outputs().isEmpty()) {
+            ItemStack out = rawIron.outputs().get(0).stack();
+            doubling = "hrf_iron_dust".equals(ItemRegistry.get().idOf(out)) && out.getAmount() >= 2;
+        }
+        check("研磨支持矿石翻倍 (1 粗矿 -> 2 粉)", doubling,
+                doubling ? "已支持 ✓" : "缺失 ✗ (基础层将失去核心收益)");
+
+        // 离心：1 粉 -> 1 锭（无损）
+        MachineRecipe centrifuge = registry.byId("centrifuge_iron_dust");
+        boolean lossless = false;
+        if (centrifuge != null) {
+            int inputAmount = centrifuge.inputs().isEmpty() ? 0 : centrifuge.inputs().get(0).getAmount();
+            int outputAmount = 0;
+            for (var out : centrifuge.outputs()) {
+                if (out.stack().getType() == Material.IRON_INGOT) {
+                    outputAmount = out.stack().getAmount();
+                    break;
+                }
+            }
+            lossless = inputAmount > 0 && outputAmount >= inputAmount;
+        }
+        check("离心机不亏损 (1 粉 -> >=1 锭)", lossless,
+                lossless ? "无损 ✓" : "仍是净亏损 ✗");
+
+        // 全链路：1 粗铁 -> 2 粉 -> 2 铁锭，必须优于熔炉的 1:1
+        check("冶炼线优于原版熔炉 (粗铁 -> 2 铁锭)",
+                doubling && lossless,
+                "1 粗铁 -> 2 粉 -> 2 铁锭 vs 熔炉 1:1");
+
+        // 碳循环不应亏本：煤炭 -> 碳粉 -> 煤炭 的往返比
+        MachineRecipe toCarbon = registry.byId("grind_coal");
+        MachineRecipe toCoal = registry.byId("smelt_carbon_to_coal");
+        boolean carbonSane = true;
+        String carbonDetail = "不适用";
+        if (toCarbon != null && toCoal != null) {
+            int carbonPerCoal = toCarbon.outputs().isEmpty() ? 0 : toCarbon.outputs().get(0).stack().getAmount();
+            int coalPerCarbon = toCoal.inputs().isEmpty() ? 0 : toCoal.inputs().get(0).getAmount();
+            if (carbonPerCoal > 0) {
+                // 每得 1 煤需要的碳粉数，换算回煤炭数：必须 > 1 才不算自循环刷取
+                double coalCostPerCoal = (double) coalPerCarbon / carbonPerCoal;
+                carbonSane = coalCostPerCoal > 1.0D;
+                carbonDetail = String.format("1 煤 -> %d 碳，%d 碳 -> 1 煤 (等效 %.1f 煤/煤)",
+                        carbonPerCoal, coalPerCarbon, coalCostPerCoal);
+            }
+        }
+        check("碳循环不构成无损自循环", carbonSane, carbonDetail);
     }
 
     // ------------------------------------------------------------------

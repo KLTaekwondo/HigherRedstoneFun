@@ -2,6 +2,7 @@ package com.koole.higherRedStoneFun.listeners;
 
 import com.koole.higherRedStoneFun.HigherRedStoneFun;
 import com.koole.higherRedStoneFun.core.Text;
+import com.koole.higherRedStoneFun.items.ItemRegistry;
 import com.koole.higherRedStoneFun.machines.MachineInstance;
 import com.koole.higherRedStoneFun.machines.MachineMenu;
 import com.koole.higherRedStoneFun.machines.logic.CraftingTableLogic;
@@ -86,23 +87,24 @@ public final class MachineMenuListener implements Listener {
 
         RecipeType type = machine.definition().recipeType();
 
-        // ---- 输出槽：只允许空手取走 ----
-        if (type.isOutputSlot(raw)) {
+        // ---- 输出槽 ----
+        if (menu.isOutputSlot(raw)) {
+            // 光标上有东西：禁止往输出槽放
             if (!isEmpty(event.getCursor())) {
-                // 光标上有东西：禁止往输出槽放
                 event.setCancelled(true);
                 return;
             }
-            if (machine.definition().logic() instanceof CraftingTableLogic logic) {
-                // 工作台需要在此刻结算材料
-                ItemStack taken = logic.takeResult(machine);
-                if (taken == null) {
-                    event.setCancelled(true);
-                    return;
-                }
-                // 允许原版把结果格内容移入光标，随后刷新预览
-                refreshLater(menu, machine);
+
+            // 虚拟输出槽（工作台）：需要手动结算，不能让原版逻辑直接把格子里的
+            // 预览物品交给玩家——那份预览并不属于机器。
+            if (menu.isVirtualOutputSlot(raw)) {
+                event.setCancelled(true);
+                takeVirtualResult((Player) event.getWhoClicked(), menu, machine);
+                return;
             }
+
+            // 真实输出槽（自动机器）：放行原版取物逻辑
+            refreshLater(menu, machine);
             return;
         }
 
@@ -117,14 +119,49 @@ public final class MachineMenuListener implements Listener {
                 event.setCancelled(true);
                 return;
             }
-            if (!isEmpty(event.getCursor())) {
-                refreshLater(menu, machine);
-            }
+            refreshLater(menu, machine);
             return;
         }
 
         // ---- 其他槽位（燃料 / 副产物）：放行 ----
         refreshLater(menu, machine);
+    }
+
+    /**
+     * 结算虚拟输出：重新校验配方 -> 扣材料 -> 把产物交给玩家。
+     *
+     * <p>产物是<b>现场重新计算</b>出来的新物品，而不是界面上那个展示用的预览，
+     * 因此即使玩家在界面上看到过预览，也必须材料成立才会真正拿到东西。</p>
+     */
+    private void takeVirtualResult(Player player, MachineMenu menu, MachineInstance machine) {
+        if (!(machine.definition().logic() instanceof CraftingTableLogic logic)) {
+            return;
+        }
+        ItemStack result = logic.takeResult(machine);
+        if (result == null) {
+            // 配方不成立（材料被改动过），刷新掉过期的预览
+            menu.renderPreview();
+            return;
+        }
+
+        // 先叠加到光标上已有的同类物品，再退化为放入背包，最后才掉在地上
+        ItemStack cursor = player.getItemOnCursor();
+        if (!isEmpty(cursor) && ItemRegistry.get().sameItem(cursor, result)
+                && cursor.getAmount() + result.getAmount() <= cursor.getMaxStackSize()) {
+            ItemStack merged = cursor.clone();
+            merged.setAmount(cursor.getAmount() + result.getAmount());
+            player.setItemOnCursor(merged);
+        } else if (isEmpty(cursor)) {
+            player.setItemOnCursor(result);
+        } else {
+            var leftover = player.getInventory().addItem(result);
+            for (ItemStack drop : leftover.values()) {
+                player.getWorld().dropItemNaturally(player.getLocation(), drop);
+            }
+        }
+
+        // 刷新预览，让玩家能连续合成
+        menu.renderPreview();
     }
 
     @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
@@ -147,12 +184,17 @@ public final class MachineMenuListener implements Listener {
         refreshLater(menu, machine);
     }
 
+    /**
+     * 关闭界面：把内容写回机器。
+     *
+     * <p>{@link MachineMenu#flush()} 会跳过虚拟输出槽，因此工作台的预览
+     * 不会被当成真实物品存进机器，也就无法通过拆机器被带走。</p>
+     */
     @EventHandler
     public void onClose(InventoryCloseEvent event) {
         if (!(event.getInventory().getHolder() instanceof MachineMenu menu)) {
             return;
         }
-        // 把界面内容原样写回机器，保证「关掉界面 = 内容保存在机器里」
         menu.flush();
     }
 
@@ -179,14 +221,17 @@ public final class MachineMenuListener implements Listener {
             }
             machine.definition().logic().onContentsChanged(machine);
 
-            // 把最新的预览同步到结果槽
+            if (menu.usesVirtualOutput()) {
+                // 虚拟输出：只重新渲染预览，绝不写进机器状态
+                menu.renderPreview();
+                return;
+            }
+
+            // 真实输出：把机器里的产物同步到界面
             int output = machine.definition().recipeType().outputSlot();
             ItemStack result = machine.getSlot(output);
             ItemStack shown = menu.getInventory().getItem(output);
-
-            // 只有当玩家没有在操作结果槽时才覆盖显示
-            if (isEmpty(shown) || com.koole.higherRedStoneFun.items.ItemRegistry.get()
-                    .sameItem(shown, result == null ? shown : result)) {
+            if (isEmpty(shown) || ItemRegistry.get().sameItem(shown, result == null ? shown : result)) {
                 menu.getInventory().setItem(output, result);
             }
         });

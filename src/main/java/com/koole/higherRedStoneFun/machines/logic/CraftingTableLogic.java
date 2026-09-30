@@ -15,9 +15,21 @@ import java.util.List;
  * <p>与自动机器的区别：工作台不消耗燃料也不推进进度，玩家把材料摆进去后
  * 结果格会立即显示预览；玩家取走结果时才真正扣除材料。</p>
  *
- * <p>相比粘液科技的同类工作台，这里增加了一个体验优化：
- * <b>结果格是「实时预览」</b>，玩家摆放过程中就能看到能做出什么，
- * 不需要反复试错。</p>
+ * <h2>为什么预览不能存进机器状态</h2>
+ *
+ * <p>早期实现把预览产物<b>直接写进机器的输出槽</b>，而材料只在玩家点击取走时
+ * 才扣除。这留下了一条无限复制路径：</p>
+ *
+ * <pre>
+ *   放入 8 铁 + 1 铜  ->  预览把「机器框架」写进输出槽（材料还没扣）
+ *                     ->  直接破坏机器
+ *                     ->  掉落：8 铁 + 1 铜 + 1 机器框架
+ *   净赚一个机器框架，可无限重复。
+ * </pre>
+ *
+ * <p>根因是模型问题而非笔误：<b>预览是「界面上的一个提示」，不是「机器持有的一件物品」</b>。
+ * 因此现在预览完全由 {@link com.koole.higherRedStoneFun.machines.MachineMenu}
+ * 渲染到 GUI 层，机器状态里永远不存在这个物品，破坏机器自然也掉不出来。</p>
  */
 public final class CraftingTableLogic extends RecipeMachineLogic {
 
@@ -27,11 +39,21 @@ public final class CraftingTableLogic extends RecipeMachineLogic {
 
     @Override
     public boolean tick(MachineInstance machine) {
-        // 工作台不自动生产，仅刷新预览
+        // 工作台不自动生产
         return false;
     }
 
-    /** 计算当前输入对应的配方，没有则返回 null。 */
+    @Override
+    public boolean hasVirtualOutput() {
+        return true;
+    }
+
+    /**
+     * 计算当前输入对应的配方，没有则返回 null。
+     *
+     * <p>输入槽里放着的物品本身可能是合成原料，也可能包含玩家主动放进去的成品，
+     * 这里一律按「输入」处理；输出槽永远不参与匹配。</p>
+     */
     public MachineRecipe preview(MachineInstance machine) {
         RecipeType type = machine.definition().recipeType();
         List<ItemStack> inputs = new ArrayList<>();
@@ -47,28 +69,38 @@ public final class CraftingTableLogic extends RecipeMachineLogic {
         return RecipeRegistry.get().findMatch(type, inputs);
     }
 
+    /** 供 GUI 渲染的预览产物。永远不写回机器状态。 */
     @Override
-    public void onContentsChanged(MachineInstance machine) {
-        updatePreview(machine);
+    public ItemStack previewResult(MachineInstance machine) {
+        MachineRecipe recipe = preview(machine);
+        if (recipe == null || recipe.outputs().isEmpty()) {
+            return null;
+        }
+        return recipe.outputs().get(0).stack();
     }
 
-    /** 把配方预览写入结果格。 */
-    public void updatePreview(MachineInstance machine) {
-        int output = machine.definition().recipeType().outputSlot();
-        MachineRecipe recipe = preview(machine);
-
-        if (recipe == null || recipe.outputs().isEmpty()) {
-            // 配方不成立：清掉预览，避免玩家白拿一个成品
-            machine.setSlot(output, null);
-            return;
-        }
-        machine.setSlot(output, recipe.outputs().get(0).stack());
+    @Override
+    public void onContentsChanged(MachineInstance machine) {
+        // 预览由界面负责渲染，机器侧无需任何动作。
+        //
+        // 这里刻意留空：早期版本在此把预览写进机器的输出槽，
+        // 导致「放材料 -> 拆机器」可以白拿产物（无限复制）。
+        // 回归测试见 SelfTest#testCraftingTableSafety。
+        // 如需验证该测试确实有效，可临时恢复下面两行，测试应报
+        // 「拆机器不会白送产物 … 回收 xxx x1 (必须为 0)」。
+        //
+        //   MachineRecipe recipe = preview(machine);
+        //   machine.setSlot(machine.definition().recipeType().outputSlot(),
+        //                   recipe == null ? null : recipe.outputs().get(0).stack());
     }
 
     /**
-     * 玩家取走结果时调用：确认配方仍然成立，然后扣除材料。
+     * 玩家取走结果时调用：重新校验配方，成立才扣除材料并返回产物。
      *
-     * @return 实际给出的产物，null 表示配方不成立
+     * <p>注意这里<b>重新匹配一次配方</b>，而不是信任界面上显示的预览——
+     * 玩家可能在界面里改动过材料，只有当下这一刻成立才算数。</p>
+     *
+     * @return 实际给出的产物，null 表示配方不成立（调用方应取消这次操作）
      */
     public ItemStack takeResult(MachineInstance machine) {
         MachineRecipe recipe = preview(machine);
@@ -88,9 +120,8 @@ public final class CraftingTableLogic extends RecipeMachineLogic {
             machine.setSlot(inputSlots[i], slots.get(i));
         }
 
-        ItemStack result = recipe.outputs().get(0).stack();
         machine.incrementCompleted();
-        return result;
+        return recipe.outputs().get(0).stack();
     }
 
     @Override

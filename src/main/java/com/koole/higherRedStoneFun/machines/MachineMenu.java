@@ -1,6 +1,7 @@
 package com.koole.higherRedStoneFun.machines;
 
 import com.koole.higherRedStoneFun.core.Text;
+import com.koole.higherRedStoneFun.machines.logic.CraftingTableLogic;
 import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.Inventory;
@@ -39,19 +40,58 @@ public final class MachineMenu implements InventoryHolder {
         return machine;
     }
 
-    /** 把机器内容镜像到界面。 */
+    /**
+     * 把机器内容镜像到界面，并渲染虚拟输出预览。
+     *
+     * <p>虚拟输出（工作台的结果格）只存在于界面层，永远不会写回机器状态，
+     * 因此玩家拆掉机器时不可能把它带走。</p>
+     */
     public void refresh() {
         ItemStack[] contents = machine.contents();
         for (int i = 0; i < inventory.getSize(); i++) {
             inventory.setItem(i, i < contents.length ? contents[i] : null);
         }
+        renderPreview();
     }
 
-    /** 把界面内容写回机器（正常关闭时调用）。 */
+    /** 单独刷新虚拟输出槽（玩家改动材料后调用）。 */
+    public void renderPreview() {
+        MachineLogic logic = machine.definition().logic();
+        if (!logic.hasVirtualOutput()) {
+            return;
+        }
+        int output = virtualOutputSlot();
+        if (output < 0) {
+            return;
+        }
+        // 预览是界面层的展示物，不落进 machine
+        inventory.setItem(output, logic.previewResult(machine));
+    }
+
+    /** 虚拟输出槽的下标，没有则为 -1。 */
+    public int virtualOutputSlot() {
+        if (!machine.definition().hasRecipes() || !machine.definition().logic().hasVirtualOutput()) {
+            return -1;
+        }
+        return machine.definition().recipeType().outputSlot();
+    }
+
+    /**
+     * 把界面内容写回机器（关闭界面时调用）。
+     *
+     * <p><b>必须跳过虚拟输出槽</b>：那个格子里的东西只是预览，
+     * 若一并写回就会变成可被拆走的真实物品，正是复制漏洞的来源。</p>
+     */
     public void flush() {
         int size = machine.definition().inventorySize();
+        int virtualSlot = virtualOutputSlot();
         ItemStack[] contents = new ItemStack[size];
         for (int i = 0; i < size; i++) {
+            if (i == virtualSlot) {
+                // 虚拟槽：保持机器原本的值（工作台恒为 null）
+                contents[i] = machine.getSlot(i);
+                continue;
+            }
             contents[i] = inventory.getItem(i);
         }
         machine.setContents(contents);
@@ -80,8 +120,16 @@ public final class MachineMenu implements InventoryHolder {
         if (!machine.definition().hasRecipes()) {
             return false;
         }
-        int output = machine.definition().recipeType().outputSlot();
-        // 部分机器（组装/分子重组）输出槽与输入槽有重叠布局，这里以实际输出槽为准
-        return slot == output;
+        return slot == machine.definition().recipeType().outputSlot();
+    }
+
+    /** 该槽位是否是虚拟输出（玩家取走时需要走结算流程）。 */
+    public boolean isVirtualOutputSlot(int slot) {
+        return slot >= 0 && slot == virtualOutputSlot();
+    }
+
+    /** 该界面是否使用虚拟输出模型。 */
+    public boolean usesVirtualOutput() {
+        return machine.definition().logic() instanceof CraftingTableLogic;
     }
 }
