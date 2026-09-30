@@ -1,0 +1,33 @@
+name: HigherRedStoneFun
+version: '${version}'
+main: com.koole.higherRedStoneFun.HigherRedStoneFun
+api-version: '26.3'
+load: POSTWORLD
+authors: [ Koole ]
+description: HigherRedStoneFun - 一个融合基础机器、高级电力机器与基因工程的科技插件 (v0.1)
+website: https://github.com/
+folia-supported: false
+
+commands:
+  hrf:
+    description: HigherRedStoneFun 主命令
+    usage: /hrf <help|give|guide|energy|genes|reload>
+    aliases: [ higherredstonefun, redstonefun ]
+    permission: hrf.command
+
+permissions:
+  hrf.command:
+    description: 允许使用 /hrf 基础命令
+    default: true
+  hrf.command.give:
+    description: 允许使用 /hrf give 获取物品
+    default: op
+  hrf.command.reload:
+    description: 允许重载配置
+    default: op
+  hrf.machine.use:
+    description: 允许使用机器
+    default: true
+  hrf.genetics.use:
+    description: 允许使用基因机器
+    default: true

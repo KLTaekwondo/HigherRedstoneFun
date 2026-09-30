@@ -1,0 +1,30 @@
+# 统一换行符，避免跨平台问题。
+#
+# 关键：gradlew 是 bash 脚本。如果以 CRLF 存储，Linux/macOS 用户克隆后
+# 运行会报 "bad interpreter: /bin/sh^M"，因此必须强制 LF。
+# Windows 的批处理脚本则必须保持 CRLF。
+
+* text=auto eol=lf
+
+# Unix shell 脚本：必须 LF
+gradlew text eol=lf
+*.sh    text eol=lf
+
+# Windows 批处理：必须 CRLF
+*.bat   text eol=crlf
+*.cmd   text eol=crlf
+
+# 二进制文件不要做换行转换
+*.jar   binary
+*.png   binary
+*.jpg   binary
+*.gif   binary
+*.zip   binary
+*.gz    binary
+
+# Gradle wrapper jar 保持原样
+gradle/wrapper/gradle-wrapper.jar binary
+
+# 语言统计：文档视为文档而非代码
+*.md    linguist-documentation
+docs/*  linguist-documentation

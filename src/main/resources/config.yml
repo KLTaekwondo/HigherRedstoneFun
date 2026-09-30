@@ -1,0 +1,55 @@
+# ============================================================
+# HigherRedStoneFun v0.1 配置文件
+# ============================================================
+
+# 性能相关
+performance:
+  # 是否启用能源网络调度（每 tick）
+  enable-energy-net: true
+  # 是否启用机器调度（每 tick）
+  enable-machines: true
+  # 自动保存间隔（tick）。默认 6000 = 5 分钟。最小 600 = 30 秒。
+  autosave-interval-ticks: 6000
+
+# 基因工程
+genetics:
+  # 是否让世界中的野生作物自动携带随机基因
+  # true  -> 任何成熟作物的收获/采样都可能带有基因，玩家可以「野外选种」
+  # false -> 只有通过基因机器处理过的种子才带基因
+  wild-crops-have-genes: true
+  # 野生作物的基因质量（0.0 ~ 1.0），越高越容易出现高等级基因
+  wild-gene-quality: 0.35
+  # 是否允许用基因培育舱全自动生产作物
+  enable-growth-chamber: true
+  # 培养舱基础耗时倍率（1.0 = 默认 20 秒/次）
+  growth-chamber-speed: 1.0
+  # 动物基因是否可遗传给后代
+  inheritable-animals: true
+
+# 能源
+energy:
+  # 导线方块（可自定义，但需要是实体方块）
+  # 默认: COPPER_BLOCK, LIGHTNING_ROD, END_ROD
+  cable-materials:
+    - COPPER_BLOCK
+    - LIGHTNING_ROD
+    - END_ROD
+  # 单个能源网络允许接入的最大机器数
+  max-machines-per-network: 512
+
+# 安全
+safety:
+  # 只有机器主人或管理员能打开/拆除机器
+  owner-only-machines: true
+  # 核反应堆熔毁是否造成爆炸破坏地形
+  reactor-meltdown-griefing: true
+
+# 调试
+debug:
+  # 每次自动保存都输出日志
+  verbose-autosave: false
+  # 区块加载恢复机器时输出日志
+  verbose-chunks: false
+  # 插件启动时自动运行核心系统自检（结果输出到控制台）
+  # 也可以不修改配置，直接用 -Dhrf.selftest=true 启动服务器来临时开启
+  run-selftest-on-start: false
