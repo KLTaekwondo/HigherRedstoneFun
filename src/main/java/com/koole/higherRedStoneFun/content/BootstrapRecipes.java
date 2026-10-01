@@ -89,7 +89,7 @@ public final class BootstrapRecipes {
         add(plugin, frame);
 
         // ----------------------------------------------------------
-        // 2. 铜导线 —— 电力线的前置
+        // 2. 铜导线 —— 红石流能线的前置
         //    无序：1 铜锭 -> 3 铜导线
         // ----------------------------------------------------------
         ShapelessRecipe wire = new ShapelessRecipe(

@@ -6,15 +6,15 @@ import org.bukkit.Location;
  * 接入能源网络的一个节点。
  *
  * <p>实现类通常是机器方块本身。节点不关心网络拓扑，只负责回答三个问题：
- * 我能发多少电、我需要多少电、我有多少储能。</p>
+ * 我能产出多少 HRE、我需要多少 HRE、我有多少储能。</p>
  */
 public interface EnergyNode {
 
     /** 节点在网络中扮演的角色。 */
     enum Role {
-        /** 发电机：{@link #generate()} 返回本 tick 发出的焦耳。 */
+        /** 发电机：{@link #generate()} 返回本 tick 产出的 HRE。 */
         GENERATOR,
-        /** 用电机：{@link #demand()} 返回本 tick 想要的焦耳。 */
+        /** 用能机器：{@link #demand()} 返回本 tick 想要的 HRE。 */
         CONSUMER,
         /** 储能：电池 / 电容。 */
         STORAGE
@@ -27,27 +27,27 @@ public interface EnergyNode {
     Role role();
 
     /**
-     * 发电机调用：产出能量。
+     * 发电机调用：产出红石流能。
      *
-     * @return 本 tick 产生的焦耳数，0 表示未发电
+     * @return 本 tick 产生的 HRE 数，0 表示未产能
      */
     default long generate() {
         return 0L;
     }
 
     /**
-     * 用电机调用：本 tick 希望获得的焦耳数。
+     * 用能机器调用：本 tick 希望获得的 HRE 数。
      *
-     * @return 期望值，0 表示当前不需要电
+     * @return 期望值，0 表示当前不需要红石流能
      */
     default long demand() {
         return 0L;
     }
 
     /**
-     * 用电机调用：领取能量。
+     * 用能机器调用：领取红石流能。
      *
-     * @param joules 实际分配给它的焦耳（可能小于 demand）
+     * @param joules 实际分配给它的 HRE（可能小于 demand）
      */
     default void receive(long joules) {
     }
@@ -55,18 +55,18 @@ public interface EnergyNode {
     /**
      * 储能调用：充能。
      *
-     * @param joules 试图充入的焦耳
-     * @return 实际接受的焦耳
+     * @param joules 试图充入的 HRE
+     * @return 实际接受的 HRE
      */
     default long charge(long joules) {
         return 0L;
     }
 
     /**
-     * 储能调用：放电。
+     * 储能调用：放能。
      *
-     * @param joules 试图抽取的焦耳
-     * @return 实际给出的焦耳
+     * @param joules 试图抽取的 HRE
+     * @return 实际给出的 HRE
      */
     default long discharge(long joules) {
         return 0L;

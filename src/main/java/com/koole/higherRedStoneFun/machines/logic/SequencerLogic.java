@@ -10,7 +10,7 @@ import org.bukkit.inventory.ItemStack;
 /**
  * 基因测序仪逻辑。
  *
- * <p>工作流：把「生物样本」和「基因引物」放进机器，消耗电力后
+ * <p>工作流：把「生物样本」和「基因引物」放进机器，消耗红石流能后
  * 解析出一个基因组。样本本身携带的基因组（如果有）会作为解析结果的
  * 起点，这就是「选育」的第一步——玩家需要先去野外找到高等级的植株。</p>
  */
@@ -20,7 +20,7 @@ public final class SequencerLogic implements MachineLogic {
     public static final int PRIMER_SLOT = 12;
     public static final int OUTPUT_SLOT = 15;
 
-    /** 一次测序的耗电量。 */
+    /** 一次测序消耗的 HRE。 */
     private static final long ENERGY_PER_RUN = 2_400L;
     /** 测序耗时（tick）。 */
     private static final int DURATION = 200;

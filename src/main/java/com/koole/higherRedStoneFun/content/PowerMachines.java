@@ -12,15 +12,17 @@ import com.koole.higherRedStoneFun.recipes.RecipeType;
 import org.bukkit.Material;
 
 /**
- * 模块二：高级电力机器。
+ * 模块二：红石流能机器。
  *
- * <p>设计意图：把「电力」做成一整套可管理的系统，而不是单纯的燃料替代品。</p>
+ * <p>设计意图：把「红石流能」做成一整套可管理的系统，而不是单纯的燃料替代品。
+ * 基础机器烧红石驱动，红石流能机器则接入能源网络，用 <b>HRE</b>
+ * （Higher Redstone Energy，红石流能）计量产能、耗能与储能。</p>
  *
  * <ul>
- *   <li><b>发电端</b>：燃煤发电机（稳定）→ 太阳能（免费但看天）→ 地热（看环境）→ 核反应堆（最强但会熔毁），
+ *   <li><b>发电端</b>：红石发电机（稳定）→ 太阳能（免费但看天）→ 地热（看环境）→ 核反应堆（最强但会熔毁），
  *       形成清晰的升级曲线。</li>
  *   <li><b>储能端</b>：电容，用于跨昼夜缓冲，决定电网的稳定性。</li>
- *   <li><b>用电端</b>：电力熔炼、电力研磨、组装机、分子重组机，速度与耗电挂钩。</li>
+ *   <li><b>耗能端</b>：红石流能熔炼、红石流能研磨、组装机、分子重组机，速度与耗能挂钩。</li>
  * </ul>
  */
 public final class PowerMachines {
@@ -35,16 +37,17 @@ public final class PowerMachines {
         // 发电端
         // ==========================================================
 
+        // id 保留 hrf_coal_generator：改名不改 id，避免破坏已有存档与配方引用
         registry.register(MachineDefinition.builder(
-                        "hrf_coal_generator", "燃煤发电机", ItemGroup.POWER_MACHINES, Material.FURNACE)
+                        "hrf_coal_generator", "红石发电机", ItemGroup.POWER_MACHINES, Material.FURNACE)
                 .energyRole(EnergyNode.Role.GENERATOR)
                 .throughput(8L)
                 .buffer(2_000L)
                 .inventorySize(9)
                 .logic(new GeneratorLogic(8L))
-                .lore("<gray>最基础的发电机，烧燃料产电")
-                .lore("<gray>产能: <red>8 J/t</red> <dark_gray>(≈160 J/s)")
-                .lore("<gray>内部缓冲: <red>2,000 J")
+                .lore("<gray>最基础的发电机，烧红石产出红石流能")
+                .lore("<gray>产能: <red>8 HRE/t</red> <dark_gray>(≈160 HRE/s)")
+                .lore("<gray>内部缓冲: <red>2,000 HRE")
                 .build());
 
         registry.register(MachineDefinition.builder(
@@ -54,8 +57,8 @@ public final class PowerMachines {
                 .buffer(4_000L)
                 .inventorySize(9)
                 .logic(new SolarGeneratorLogic(12L))
-                .lore("<gray>白天免费产电，但完全依赖天气与光照")
-                .lore("<gray>峰值产能: <red>12 J/t</red> <dark_gray>(满光照、晴天)")
+                .lore("<gray>白天免费产能，但完全依赖天气与光照")
+                .lore("<gray>峰值产能: <red>12 HRE/t</red> <dark_gray>(满光照、晴天)")
                 .lore("<gold>必须露天放置，上方不能有遮挡")
                 .lore("<gray>夜间 / 降雨 / 雷暴会大幅降低效率")
                 .build());
@@ -67,8 +70,8 @@ public final class PowerMachines {
                 .buffer(8_000L)
                 .inventorySize(9)
                 .logic(new GeothermalLogic(20L))
-                .lore("<gray>利用岩浆的热量持续产电")
-                .lore("<gray>产能: <red>20 J/t</red> <dark_gray>(≈400 J/s)")
+                .lore("<gray>利用岩浆的热量持续产出红石流能")
+                .lore("<gray>产能: <red>20 HRE/t</red> <dark_gray>(≈400 HRE/s)")
                 .lore("<gold>下方 3 格内需要有岩浆")
                 .build());
 
@@ -81,7 +84,7 @@ public final class PowerMachines {
                 .logic(new ReactorLogic(400L))
                 .lore("<gray>全插件最强的电源，但会熔毁爆炸")
                 .lore("<dark_red><bold>终局发电机</bold>")
-                .lore("<gray>产能: <red>400 J/t</red> <dark_gray>(≈8,000 J/s)")
+                .lore("<gray>产能: <red>400 HRE/t</red> <dark_gray>(≈8,000 HRE/s)")
                 .lore("<gray>燃料槽: 下界合金碎片 / 远古残骸 / 烈焰棒")
                 .lore("<gray>冷却槽: 蓝冰 / 浮冰 / 冰 / 雪球")
                 .lore("<red>失去冷却会持续升温，满值后熔毁爆炸！")
@@ -97,8 +100,8 @@ public final class PowerMachines {
                 .energyRole(EnergyNode.Role.STORAGE)
                 .buffer(50_000L)
                 .inventorySize(9)
-                .lore("<gray>存储电能，用于跨昼夜缓冲")
-                .lore("<gray>容量: <red>50,000 J")
+                .lore("<gray>存储红石流能，用于跨昼夜缓冲")
+                .lore("<gray>容量: <red>50,000 HRE")
                 .build());
 
         registry.register(MachineDefinition.builder(
@@ -107,7 +110,7 @@ public final class PowerMachines {
                 .buffer(500_000L)
                 .inventorySize(9)
                 .lore("<gray>大容量储能，阵列化后可支撑整座基地")
-                .lore("<gray>容量: <red>500,000 J")
+                .lore("<gray>容量: <red>500,000 HRE")
                 .glow(true)
                 .build());
 
@@ -117,36 +120,36 @@ public final class PowerMachines {
                 .buffer(1_000_000L)
                 .inventorySize(9)
                 .lore("<gray>超大型储能与稳压设备")
-                .lore("<gray>容量: <red>1,000,000 J")
+                .lore("<gray>容量: <red>1,000,000 HRE")
                 .lore("<gold>建议与核反应堆配套使用")
                 .build());
 
         // ==========================================================
-        // 用电端
+        // 耗能端
         // ==========================================================
 
         registry.register(MachineDefinition.builder(
-                        "hrf_electric_smeltery", "电力冶炼炉", ItemGroup.POWER_MACHINES, Material.BLAST_FURNACE)
+                        "hrf_electric_smeltery", "红石流能冶炼炉", ItemGroup.POWER_MACHINES, Material.BLAST_FURNACE)
                 .recipeType(RecipeType.ELECTRIC_SMELTING)
                 .energyRole(EnergyNode.Role.CONSUMER)
                 .buffer(12_000L)
                 .throughput(6L)
                 .inventorySize(27)
                 .logic(RecipeMachineLogic.electric(6L))
-                .lore("<gray>用电驱动的冶炼炉，速度是原版熔炉的 8 倍")
-                .lore("<gray>耗电: <red>6 J/t")
+                .lore("<gray>由红石流能驱动的冶炼炉，速度是原版熔炉的 8 倍")
+                .lore("<gray>耗能: <red>6 HRE/t")
                 .build());
 
         registry.register(MachineDefinition.builder(
-                        "hrf_electric_grinder", "电力研磨机", ItemGroup.POWER_MACHINES, Material.GRINDSTONE)
+                        "hrf_electric_grinder", "红石流能研磨机", ItemGroup.POWER_MACHINES, Material.GRINDSTONE)
                 .recipeType(RecipeType.ELECTRIC_GRINDING)
                 .energyRole(EnergyNode.Role.CONSUMER)
                 .buffer(10_000L)
                 .throughput(5L)
                 .inventorySize(27)
                 .logic(RecipeMachineLogic.electric(5L))
-                .lore("<gray>电力驱动的高速研磨，效率高于燃料版")
-                .lore("<gray>耗电: <red>5 J/t")
+                .lore("<gray>红石流能驱动的高速研磨，效率高于燃料版")
+                .lore("<gray>耗能: <red>5 HRE/t")
                 .build());
 
         registry.register(MachineDefinition.builder(
@@ -158,7 +161,7 @@ public final class PowerMachines {
                 .inventorySize(45)
                 .logic(RecipeMachineLogic.electric(25L))
                 .lore("<gray>自动组装复杂机械与电路")
-                .lore("<gray>耗电: <red>25 J/t")
+                .lore("<gray>耗能: <red>25 HRE/t")
                 .lore("<gold>高级机器的必经之路")
                 .build());
 
@@ -172,7 +175,7 @@ public final class PowerMachines {
                 .logic(RecipeMachineLogic.electric(120L))
                 .lore("<gray>在分子层面重组物质，产出稀有材料")
                 .lore("<dark_purple><bold>终局合成设备</bold>")
-                .lore("<gray>耗电: <red>120 J/t")
+                .lore("<gray>耗能: <red>120 HRE/t")
                 .glow(true)
                 .build());
     }

@@ -8,8 +8,8 @@ import org.bukkit.block.Block;
 /**
  * 太阳能发电机。
  *
- * <p>发电量由机器上方的实际天空光照决定，因此玩家必须把机器露天放置，
- * 并且需要注意「光照等级 = 发电效率」这一点，而不是简单地看白天黑夜。</p>
+ * <p>产能由机器上方的实际天空光照决定，因此玩家必须把机器露天放置，
+ * 并且需要注意「光照等级 = 产能效率」这一点，而不是简单地看白天黑夜。</p>
  */
 public final class SolarGeneratorLogic implements MachineLogic {
 

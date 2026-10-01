@@ -9,7 +9,7 @@ import java.util.List;
  * 一条机器配方。
  *
  * <p>配方只描述「消耗什么、产出什么、需要多少能量、需要多少 tick」，
- * 具体执行由机器负责，因此同一份配方可以被燃料机器和电力机器共用。</p>
+ * 具体执行由机器负责，因此同一份配方可以被燃料机器和红石流能机器共用。</p>
  */
 public final class MachineRecipe {
 
@@ -49,7 +49,7 @@ public final class MachineRecipe {
         return List.copyOf(outputs);
     }
 
-    /** 消耗的焦耳数（燃料机器会忽略此值）。 */
+    /** 消耗的 HRE 数（燃料机器会忽略此值）。 */
     public int energyCost() {
         return energyCost;
     }
@@ -91,8 +91,8 @@ public final class MachineRecipe {
             return this;
         }
 
-        public Builder energy(int joules) {
-            this.energyCost = joules;
+        public Builder energy(int hre) {
+            this.energyCost = hre;
             return this;
         }
 

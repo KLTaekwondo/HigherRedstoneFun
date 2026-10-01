@@ -11,8 +11,9 @@ import org.bukkit.inventory.ItemStack;
  */
 public enum ItemGroup {
 
-    BASIC_MACHINES("基础机器", "<gray>入门级机械，无需电力即可运转", Material.COPPER_BLOCK),
-    POWER_MACHINES("高级电力机器", "<red>以焦耳(J)为能量单位的高速产线", Material.REDSTONE_BLOCK),
+    BASIC_MACHINES("基础机器", "<gray>入门级机械，烧红石即可运转", Material.COPPER_BLOCK),
+    POWER_MACHINES("红石流能机器", "<red>接入能源网络，以 HRE（红石流能）为能量单位的高速产线",
+            Material.REDSTONE_BLOCK),
     GENETICS("基因工程", "<green>作物与动物的遗传改造", Material.WHEAT_SEEDS),
     MATERIALS("材料与零件", "<yellow>各类中间产物与零件", Material.IRON_INGOT),
     TOOLS("工具与仪器", "<aqua>辅助玩家操作的器具", Material.DIAMOND_PICKAXE);

@@ -423,6 +423,6 @@ public final class MachineListener implements Listener {
     public static String describe(MachineInstance machine) {
         EnergyNode.Role role = machine.definition().energyRole();
         return machine.id() + " @" + machine.location()
-                + (role == null ? "" : " [" + role + " " + machine.energyStored() + "/" + machine.capacity() + "J]");
+                + (role == null ? "" : " [" + role + " " + machine.energyStored() + "/" + machine.capacity() + "HRE]");
     }
 }

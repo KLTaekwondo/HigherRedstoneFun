@@ -23,7 +23,7 @@ import java.util.Set;
  *       因此一万根导线也不会拖慢机器调度。</li>
  *   <li><b>网络拓扑缓存 + 脏标记</b>：网络在创建时一次性 BFS 出全部成员机器；
  *       只有方块发生变化时才重建，机器 tick 时是 O(机器数) 的简单算术。</li>
- *   <li><b>按需分配</b>：发电机先充满所有电池，剩余电量再按「申请量」分配给用电机，
+ *   <li><b>按需分配</b>：发电机先充满所有电池，剩余能量再按「申请量」分配给用能机器，
  *       避免原版「大机器抢光小机器电」的问题。</li>
  * </ol>
  */
@@ -201,7 +201,7 @@ public final class EnergyNetwork {
     /**
      * 执行一个 tick 的能源调度。
      *
-     * <p>顺序：先让发电机发电并充入电池 -> 电池之间均衡 -> 按申请量供应用电机。</p>
+     * <p>顺序：先让发电机产能并充入电池 -> 电池之间均衡 -> 按申请量供应用能机器。</p>
      */
     public void tick() {
         if (dirty) {
@@ -210,7 +210,7 @@ public final class EnergyNetwork {
 
         long generated = 0L;
 
-        // 1. 发电机发电，优先充入本网络的电池
+        // 1. 发电机产能，优先充入本网络的电池
         for (EnergyNode generator : generators) {
             long produced = generator.generate();
             if (produced <= 0L) {
@@ -219,15 +219,15 @@ public final class EnergyNetwork {
             generated += produced;
             long leftover = chargeStorages(produced);
             if (leftover > 0L) {
-                // 电池已满：电量直接用于满足用电机
+                // 电池已满：这些 HRE 直接用于满足用能机器
                 supplyConsumers(leftover);
             }
         }
 
-        // 2. 电池之间的均衡（把电量从高电量电池转移到低电量电池，避免空转）
+        // 2. 电池之间的均衡（把能量从高储能电池转移到低储能电池，避免空转）
         balanceStorages();
 
-        // 3. 用电机取电
+        // 3. 用能机器取能
         for (EnergyNode consumer : consumers) {
             long demand = consumer.demand();
             if (demand <= 0L) {
@@ -244,7 +244,7 @@ public final class EnergyNetwork {
         lastNetJoules = generated - Math.min(generated, totalConsumed);
     }
 
-    /** 把电量充入电池，返回未被吸收的剩余量。 */
+    /** 把红石流能充入电池，返回未被吸收的剩余量。 */
     private long chargeStorages(long joules) {
         long remaining = joules;
         for (EnergyNode storage : storages) {
@@ -256,7 +256,7 @@ public final class EnergyNetwork {
         return Math.max(0L, remaining);
     }
 
-    /** 从电池抽取最多 {@code joules} 焦耳，返回实际抽到的量。 */
+    /** 从电池抽取最多 {@code joules} HRE，返回实际抽到的量。 */
     private long drawFromStorages(long joules) {
         long remaining = joules;
         long drawn = 0L;
@@ -271,7 +271,7 @@ public final class EnergyNetwork {
         return drawn;
     }
 
-    /** 电池均衡：把高于平均值的电量补给低于平均值的电池。 */
+    /** 电池均衡：把高于平均值的能量补给低于平均值的电池。 */
     private void balanceStorages() {
         if (storages.size() < 2) {
             return;
@@ -294,7 +294,7 @@ public final class EnergyNetwork {
         }
     }
 
-    /** 直接向用电机注入电量（发电机满电池时的直供路径）。 */
+    /** 直接向用能机器注入红石流能（发电机满电池时的直供路径）。 */
     private void supplyConsumers(long joules) {
         long remaining = joules;
         for (EnergyNode consumer : consumers) {
@@ -327,12 +327,14 @@ public final class EnergyNetwork {
         lines.add("<gray>网络中心: <white>" + fmt(origin));
         lines.add("<gray>节点数: <white>" + machineCount() + " <gray>方块数: <white>" + blocks.size());
         lines.add("<gray>发电机: <white>" + generators.size()
-                + " <gray>用电机: <white>" + consumers.size()
+                + " <gray>用能机器: <white>" + consumers.size()
                 + " <gray>储能: <white>" + storages.size());
         lines.add("<gray>储能: <white>" + com.koole.higherRedStoneFun.core.Text.number(storedEnergy())
-                + " <gray>/ <white>" + com.koole.higherRedStoneFun.core.Text.number(capacity()) + " <gray>J");
-        lines.add("<gray>累计发电: <white>" + com.koole.higherRedStoneFun.core.Text.number(totalGenerated) + " <gray>J");
-        lines.add("<gray>累计耗电: <white>" + com.koole.higherRedStoneFun.core.Text.number(totalConsumed) + " <gray>J");
+                + " <gray>/ <white>" + com.koole.higherRedStoneFun.core.Text.number(capacity()) + " <gray>HRE");
+        lines.add("<gray>累计产能: <white>" + com.koole.higherRedStoneFun.core.Text.number(totalGenerated)
+                + " <gray>HRE");
+        lines.add("<gray>累计耗能: <white>" + com.koole.higherRedStoneFun.core.Text.number(totalConsumed)
+                + " <gray>HRE");
         return lines;
     }
 

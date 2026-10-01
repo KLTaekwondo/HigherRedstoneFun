@@ -79,7 +79,7 @@ public final class MachineDefinition {
         return bufferCapacity;
     }
 
-    /** 发电机：每 tick 产能；用电机：每 tick 基础消耗。 */
+    /** 发电机：每 tick 产能；用能机器：每 tick 基础消耗。 */
     public long throughput() {
         return throughput;
     }

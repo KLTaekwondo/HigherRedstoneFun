@@ -10,7 +10,7 @@ import org.bukkit.inventory.ItemStack;
  *
  * <p>相比粘液科技的发电机，这里做了两点优化：</p>
  * <ol>
- *   <li><b>燃料槽与产出解耦</b>：发电机只负责产电，不直接吐物品；
+ *   <li><b>燃料槽与产出解耦</b>：发电机只负责产出红石流能，不直接吐物品；
  *       副产物（如空桶）会留在机器里等玩家取走，避免刷物品。</li>
  *   <li><b>空转停机</b>：没有燃料时不参与能源网络调度，
  *       能源网络会跳过它，从而减少无效计算。</li>
@@ -31,7 +31,7 @@ public class GeneratorLogic implements MachineLogic {
     }
 
     /**
-     * @param outputPerTick 每 tick 发电量
+     * @param outputPerTick 每 tick 产能（HRE）
      * @param consumeOnIdle 是否在没有负载时也消耗燃料（默认 true，行为可预期）
      */
     public GeneratorLogic(long outputPerTick, boolean consumeOnIdle) {
@@ -46,7 +46,7 @@ public class GeneratorLogic implements MachineLogic {
 
     @Override
     public long generate(MachineInstance machine) {
-        // 缓冲已满说明电网没人用电：按配置决定是否继续烧燃料
+        // 缓冲已满说明电网没人用能：按配置决定是否继续烧燃料
         if (machine.energyStored() >= machine.definition().bufferCapacity() && !consumeOnIdle) {
             return 0L;
         }
@@ -60,7 +60,7 @@ public class GeneratorLogic implements MachineLogic {
         return outputPerTick;
     }
 
-    /** 从燃料槽取一个可燃物补充燃料 tick。 */
+    /** 从燃料槽取一个红石补充燃料 tick。 */
     protected boolean refuel(MachineInstance machine) {
         ItemStack fuel = machine.getSlot(FUEL_SLOT);
         if (fuel == null || fuel.getType().isAir()) {

@@ -13,7 +13,7 @@ import java.util.List;
  * <p>{@link ItemGroup} 是<b>物品的内部归类</b>，除了图鉴之外还被别处使用：
  * 机器界面的标题会显示它（{@code [基础机器] 增强工作台}）、
  * 注册物品时也会写进去。如果为了图鉴的显示需要把「基础机器」和
- * 「高级电力机器」合并成一个枚举值，那些地方就会一并丢失区分度。</p>
+ * 「红石流能机器」合并成一个枚举值，那些地方就会一并丢失区分度。</p>
  *
  * <p>所以这里只加一层<b>显示分组</b>：一个大类可以包含多个
  * {@link ItemGroup}，物品自身的归类保持不变。</p>
@@ -30,7 +30,7 @@ import java.util.List;
  */
 public enum GuideSection {
 
-    MACHINES("机器", "<gray>基础机器与高级电力机器",
+    MACHINES("机器", "<gray>基础机器与红石流能机器",
             Material.COPPER_BLOCK, List.of(ItemGroup.BASIC_MACHINES, ItemGroup.POWER_MACHINES)),
 
     GENETICS("基因工程", "<green>作物与动物的遗传改造",

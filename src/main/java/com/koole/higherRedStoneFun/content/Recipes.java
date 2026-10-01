@@ -11,7 +11,7 @@ import org.bukkit.inventory.ItemStack;
  * 全部机器配方。
  *
  * <p>配方的组织方式刻意做成「一条条登记」，方便后续迁移到 YAML 配置。
- * 每条配方只声明消耗、产出、耗时与耗电，机器实现完全复用。</p>
+ * 每条配方只声明消耗、产出、耗时与耗能，机器实现完全复用。</p>
  */
 public final class Recipes {
 
@@ -169,7 +169,7 @@ public final class Recipes {
                 .ticks(80)
                 .build());
 
-        // ---- 电力机器 ----
+        // ---- 红石流能机器 ----
         registry.register(MachineRecipe.builder("craft_coal_generator", RecipeType.ENHANCED_CRAFTING)
                 .input(custom("hrf_machine_frame"))
                 .input(custom("hrf_coil"))
@@ -553,7 +553,7 @@ public final class Recipes {
     }
 
     // ==================================================================
-    // 电力机器
+    // 红石流能机器
     // ==================================================================
 
     private static void registerElectric() {
@@ -710,7 +710,7 @@ public final class Recipes {
                 .ticks(900)
                 .build());
 
-        // ---- 电力机器的直接配方 ----
+        // ---- 红石流能机器的直接配方 ----
         registry.register(MachineRecipe.builder("electric_smelt_iron", RecipeType.ELECTRIC_SMELTING)
                 .input(vanilla(Material.RAW_IRON, 1))
                 .output(vanilla(Material.IRON_INGOT, 1))

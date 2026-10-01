@@ -10,7 +10,7 @@ import org.bukkit.inventory.ItemStack;
  *
  * <p>玩法设计：它是全插件最强的电源，但不是「放下去就完事」——
  * 必须持续投入燃料棒与冷却单元。一旦冷却耗尽，堆芯开始升温，
- * 温度满值后熔毁（爆炸并摧毁自身）。这把「电力」从单纯的数量优势
+ * 温度满值后熔毁（爆炸并摧毁自身）。这把「红石流能」从单纯的数量优势
  * 变成了需要持续管理的风险机制，是 v0.1 里最有张力的机械玩法。</p>
  */
 public final class ReactorLogic implements MachineLogic {
@@ -66,7 +66,7 @@ public final class ReactorLogic implements MachineLogic {
             return 0L;
         }
 
-        // 正常发电
+        // 正常产能
         machine.consumeFuelTick();
         consumeCoolant(machine);
         coolDown(machine, COOL_PER_TICK);

@@ -16,12 +16,12 @@ import java.util.concurrent.ThreadLocalRandom;
 /**
  * 通用配方机器逻辑。
  *
- * <p>燃料机器（研磨/压制/熔炼/离心/锯切）与电力机器（电力熔炼/电力研磨/组装）
+ * <p>燃料机器（研磨/压制/熔炼/离心/锯切）与红石流能机器（红石流能熔炼/红石流能研磨/组装）
  * 共用这一份实现，区别只在 {@code electric} 标志：</p>
  *
  * <ul>
- *   <li>燃料机器：从燃料槽烧燃料换取运行 tick。</li>
- *   <li>电力机器：向能源网络申请电力，按电量决定推进速度。</li>
+ *   <li>燃料机器：从燃料槽烧红石换取运行 tick。</li>
+ *   <li>红石流能机器：向能源网络申请红石流能，按缓冲里的 HRE 决定推进速度。</li>
  * </ul>
  *
  * <p>这正是对粘液科技「每种机器一个类」的优化：新增一台同类机器只需要
@@ -33,7 +33,7 @@ public class RecipeMachineLogic implements MachineLogic {
     public static final int FUEL_SLOT = 0;
 
     private final boolean electric;
-    /** 每 tick 耗电（电力机器）。 */
+    /** 每 tick 消耗的 HRE（红石流能机器）。 */
     private final long energyPerTick;
     /** 本机器燃料槽的位置。增强工作台布局不同，需要覆盖。 */
     private final int fuelSlot;
@@ -53,24 +53,24 @@ public class RecipeMachineLogic implements MachineLogic {
         return fuelSlot;
     }
 
-    /** 该机器是否耗电。 */
+    /** 该机器是否消耗红石流能。 */
     public boolean isElectric() {
         return electric;
     }
 
-    /** 每 tick 耗电量。 */
+    /** 每 tick 消耗的 HRE。 */
     public long energyPerTick() {
         return energyPerTick;
     }
 
-    /** 燃料驱动机器。 */
+    /** 燃料驱动机器（烧红石）。 */
     public static RecipeMachineLogic fuel() {
         return new RecipeMachineLogic(false, 0L);
     }
 
-    /** 电力驱动机器，参数为每 tick 焦耳消耗。 */
-    public static RecipeMachineLogic electric(long joulesPerTick) {
-        return new RecipeMachineLogic(true, joulesPerTick);
+    /** 红石流能驱动机器，参数为每 tick 的 HRE 消耗。 */
+    public static RecipeMachineLogic electric(long hrePerTick) {
+        return new RecipeMachineLogic(true, hrePerTick);
     }
 
     @Override
@@ -111,10 +111,10 @@ public class RecipeMachineLogic implements MachineLogic {
             return false;
         }
 
-        // 有活要干：申请电力（电力机器）
+        // 有活要干：申请红石流能（红石流能机器）
         machine.requestPower(true);
 
-        // 电力机器检查电量，电量不足就等待网络充电
+        // 红石流能机器检查缓冲，HRE 不够就等待网络充电
         if (electric) {
             if (machine.energyStored() < energyPerTick) {
                 return false;

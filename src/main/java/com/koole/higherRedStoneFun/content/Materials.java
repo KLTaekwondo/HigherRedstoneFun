@@ -9,7 +9,7 @@ import org.bukkit.Material;
  * 材料与零件的物品定义。
  *
  * <p>这些是三个机器模块共用的「中间产物」，构成完整的生产链：
- * 基础机器把矿石变成零件 -> 高级电力机器把零件变成精密元件 ->
+ * 基础机器把矿石变成零件 -> 红石流能机器把零件变成精密元件 ->
  * 基因机器用精密元件产出改良种子与胚胎。</p>
  */
 public final class Materials {
@@ -118,12 +118,12 @@ public final class Materials {
 
         registry.register(HrfItem.builder("hrf_battery_cell", Material.AMETHYST_SHARD,
                         "<light_purple>储能单元", ItemGroup.MATERIALS)
-                .lore("<gray>可反复充放电的储能核心")
+                .lore("<gray>可反复充放能的储能核心")
                 .build());
 
         registry.register(HrfItem.builder("hrf_solar_cell", Material.DAYLIGHT_DETECTOR,
                         "<gold>光伏板", ItemGroup.MATERIALS)
-                .lore("<gray>把阳光转化为电能")
+                .lore("<gray>把阳光转化为红石流能")
                 .build());
 
         registry.register(HrfItem.builder("hrf_reactor_core", Material.NETHER_STAR,

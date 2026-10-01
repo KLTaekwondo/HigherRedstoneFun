@@ -59,6 +59,15 @@ public final class MachineMenu implements InventoryHolder {
                 inventory.setItem(i, i < contents.length ? contents[i] : null);
             }
         }
+        refreshDynamic();
+    }
+
+    /**
+     * 只重画随机器状态变化的部分（燃料条 / 状态位 / 成品区）。
+     *
+     * <p>点击后用它刷新即可，不必整屏重画。</p>
+     */
+    public void refreshDynamic() {
         renderEnergyColumn();
         renderStatus();
         renderPreview();
@@ -70,6 +79,9 @@ public final class MachineMenu implements InventoryHolder {
      * <p>功能槽 = 输入槽 ∪ 输出槽 ∪ 燃料槽。这样玩家一眼就能看出
      * 哪几个格子是可用的，其余都是装饰——早期版本整个界面就是一堆
      * 一样的空格子，玩家根本不知道材料该放哪。</p>
+     *
+     * <p>配套约束：装饰格在 {@code MachineMenuListener} 里被禁止点击，
+     * 且 {@link #flush()} 不会把边框玻璃当成机器内容写回去。</p>
      */
     private void renderFrame() {
         ItemStack pane = pane();
@@ -86,7 +98,7 @@ public final class MachineMenu implements InventoryHolder {
         return stack;
     }
 
-    /** 该槽位是否属于功能槽（输入/输出/燃料）。 */
+    /** 该槽位是否属于功能槽（输入/输出/燃料/预览）。 */
     public boolean isFunctionalSlot(int slot) {
         if (!machine.definition().hasRecipes()) {
             return true;
@@ -102,7 +114,7 @@ public final class MachineMenu implements InventoryHolder {
                 return true;
             }
         }
-        return slot == fuelSlot();
+        return slot == fuelSlot() || slot == virtualOutputSlot();
     }
 
     /** 本机器的燃料槽位置。 */
@@ -112,6 +124,23 @@ public final class MachineMenu implements InventoryHolder {
             return rml.fuelSlot();
         }
         return -1;
+    }
+
+    /** 用「第几行第几列」描述燃料槽位置，供状态提示使用。 */
+    private String fuelSlotLabel() {
+        int slot = fuelSlot();
+        if (slot < 0 || slot >= inventory.getSize()) {
+            return "<white>燃料槽 <gray>那一格";
+        }
+        int row = slot / 9 + 1;
+        int col = slot % 9 + 1;
+        if (row == 1 && col == 1) {
+            return "<white>左上角 <gray>那一格";
+        }
+        if (row == 1 && col == 9) {
+            return "<white>右上角 <gray>那一格";
+        }
+        return "<white>第 " + row + " 行第 " + col + " 列";
     }
 
     /**
@@ -139,6 +168,10 @@ public final class MachineMenu implements InventoryHolder {
             ItemStack stack = new ItemStack(mat);
             org.bukkit.inventory.meta.ItemMeta meta = stack.getItemMeta();
             meta.displayName(Text.mm(on ? "<red>▌" : "<dark_gray>▌"));
+            // 明确标注是装饰：否则玩家会以为燃料该放这一列
+            meta.lore(List.of(
+                    Text.mm("<dark_gray>装饰：燃料余量条"),
+                    Text.mm(on ? "<gray>燃料充足" : "<red>燃料不足")));
             stack.setItemMeta(meta);
             inventory.setItem(column[column.length - 1 - i], stack);
         }
@@ -166,7 +199,8 @@ public final class MachineMenu implements InventoryHolder {
                 lore.add(Text.mm("<gray>还可合成: <white>"
                         + (fuel / CraftingTableLogic.FUEL_COST_PER_CRAFT) + " <gray>次"));
             }
-            lore.add(Text.mm("<dark_gray>把红石放进右上角燃料槽"));
+            // 位置按实际槽号算，别写死「右上角」——27 格机器的燃料槽在左上角
+            lore.add(Text.mm("<gold>燃料槽: <gray>把红石放进" + fuelSlotLabel()));
         }
         if (machine.definition().energyRole() != null) {
             lore.add(Text.mm("<gray>红石流能: <red>"
@@ -196,41 +230,68 @@ public final class MachineMenu implements InventoryHolder {
         return -1;
     }
 
-    /** 单独刷新虚拟输出槽（玩家改动材料后调用）。 */
+    /**
+     * 刷新预览格。
+     *
+     * <p>只动预览格那一格。成品区（列 6-8 的 3x3）是<b>真实存储</b>，
+     * 由 {@link #refresh()} 从机器内容渲染，不能在这里被清掉。</p>
+     */
     public void renderPreview() {
         MachineLogic logic = machine.definition().logic();
         if (!logic.hasVirtualOutput()) {
             return;
         }
-        int output = virtualOutputSlot();
-        if (output < 0) {
+        int preview = virtualOutputSlot();
+        if (preview < 0) {
             return;
         }
         // 预览是界面层的展示物，不落进 machine
-        inventory.setItem(output, logic.previewResult(machine));
+        inventory.setItem(preview, logic.previewResult(machine));
     }
 
-    /** 虚拟输出槽的下标，没有则为 -1。 */
+    /** 本机器成品区的全部输出槽（增强工作台是 3x3 九格，真实存储）。 */
+    public int[] outputSlots() {
+        if (!machine.definition().hasRecipes()) {
+            return new int[0];
+        }
+        return machine.definition().recipeType().outputSlots();
+    }
+
+    /** 预览格下标，没有则为 -1。它是虚拟格：不进机器状态、不进存档。 */
     public int virtualOutputSlot() {
         if (!machine.definition().hasRecipes() || !machine.definition().logic().hasVirtualOutput()) {
             return -1;
         }
-        return machine.definition().recipeType().outputSlot();
+        return machine.definition().logic().previewSlot();
+    }
+
+    /** 该槽位是否是预览格（点击它才结算合成）。 */
+    public boolean isPreviewSlot(int slot) {
+        return slot >= 0 && slot == virtualOutputSlot();
     }
 
     /**
      * 把界面内容写回机器（关闭界面时调用）。
      *
-     * <p><b>必须跳过虚拟输出槽</b>：那个格子里的东西只是预览，
-     * 若一并写回就会变成可被拆走的真实物品，正是复制漏洞的来源。</p>
+     * <p>两类格子必须跳过，否则会出两个具体的 bug：</p>
+     *
+     * <ul>
+     *   <li><b>预览格</b>：格子里的东西只是预览，写回就变成可被拆走的真实物品，
+     *       正是复制漏洞的来源。</li>
+     *   <li><b>装饰格</b>：那里铺的是边框玻璃板。早期实现把界面内容整体写回，
+     *       于是关一次界面就往机器里塞进三四十个玻璃板——挖机器会掉一地玻璃板，
+     *       而玩家放进装饰格的物品又会被下一次 {@code renderFrame()} 盖住，
+     *       表现为「东西放进去就没了 / 燃料加不进去」。</li>
+     * </ul>
+     *
+     * <p>成品区<b>要</b>写回：它是真实存储，产物就存在那里。</p>
      */
     public void flush() {
         int size = machine.definition().inventorySize();
-        int virtualSlot = virtualOutputSlot();
         ItemStack[] contents = new ItemStack[size];
         for (int i = 0; i < size; i++) {
-            if (i == virtualSlot) {
-                // 虚拟槽：保持机器原本的值（工作台恒为 null）
+            if (isVirtualOutputSlot(i) || !isFunctionalSlot(i)) {
+                // 保持机器原本的值：装饰格与预览格都不属于玩家能操作的范围
                 contents[i] = machine.getSlot(i);
                 continue;
             }
@@ -262,16 +323,31 @@ public final class MachineMenu implements InventoryHolder {
         if (!machine.definition().hasRecipes()) {
             return false;
         }
-        return slot == machine.definition().recipeType().outputSlot();
+        // 成品区是 3x3 九格，不能只比主输出槽——否则周围八格会被当成装饰格
+        for (int output : machine.definition().recipeType().outputSlots()) {
+            if (output == slot) {
+                return true;
+            }
+        }
+        return false;
     }
 
-    /** 该槽位是否是虚拟输出（玩家取走时需要走结算流程）。 */
+    /**
+     * 该槽位是否是虚拟输出（预览格）。
+     *
+     * <p>成品区那 9 格<b>不是</b>虚拟格——它们是真实存储，产物由预览格结算后
+     * 放进去，随机器存档、拆机器会掉出来。</p>
+     */
     public boolean isVirtualOutputSlot(int slot) {
-        return slot >= 0 && slot == virtualOutputSlot();
+        return isPreviewSlot(slot);
     }
 
     /** 该界面是否使用虚拟输出模型。 */
     public boolean usesVirtualOutput() {
         return machine.definition().logic() instanceof CraftingTableLogic;
+    }
+
+    private static boolean isEmpty(ItemStack stack) {
+        return stack == null || stack.getType().isAir();
     }
 }

@@ -146,15 +146,16 @@ public final class MachineStorage {
     }
 
     /**
-     * 该机器的虚拟输出槽下标，没有则返回 -1。
+     * 该机器的预览格下标（虚拟格），没有则返回 -1。
      *
-     * <p>双保险：即使将来有代码误把预览写进了机器状态，也不会被存进存档。</p>
+     * <p>双保险：即使将来有代码误把预览写进了机器状态，也不会被存进存档。
+     * 注意这<B>不</B>是成品区——成品区是真实存储，必须照常存档。</p>
      */
     private static int virtualOutputSlot(MachineInstance machine) {
         if (!machine.definition().hasRecipes() || !machine.definition().logic().hasVirtualOutput()) {
             return -1;
         }
-        return machine.definition().recipeType().outputSlot();
+        return machine.definition().logic().previewSlot();
     }
 
     // ------------------------------------------------------------------

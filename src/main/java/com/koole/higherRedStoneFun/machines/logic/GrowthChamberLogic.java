@@ -14,7 +14,7 @@ import java.util.concurrent.ThreadLocalRandom;
 /**
  * 基因培育舱：把改良种子的基因「变现」为实际产物。
  *
- * <p>这是基因模块的经济出口，也是玩家投入大量电力与时间去选育的回报。
+ * <p>这是基因模块的经济出口，也是玩家投入大量红石流能与时间去选育的回报。
  * 关键设计：<b>产出与基因等级直接挂钩</b>——</p>
  *
  * <ul>
@@ -33,7 +33,7 @@ public final class GrowthChamberLogic implements MachineLogic {
 
     /** 基础培育耗时（tick），会被生长基因缩短。 */
     private static final int BASE_DURATION = 400;
-    /** 每次培育耗电。 */
+    /** 每次培育消耗的 HRE。 */
     private static final long ENERGY_PER_RUN = 3_600L;
 
     private final GeneticsManager genetics;

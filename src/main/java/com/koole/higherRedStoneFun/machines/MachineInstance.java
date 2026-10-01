@@ -10,7 +10,7 @@ import java.util.UUID;
 /**
  * 一台机器方块的运行时状态。
  *
- * <p>状态与定义分离，因此一台「电力研磨机」和一台「电力熔炉」共享同一份
+ * <p>状态与定义分离，因此一台「红石流能研磨机」和一台「红石流能冶炼炉」共享同一份
  * 调度器代码，只有 {@link MachineDefinition} 不同。</p>
  */
 public final class MachineInstance implements EnergyNode {
@@ -34,7 +34,7 @@ public final class MachineInstance implements EnergyNode {
     /** 发电机的储能缓冲 / 电池的储能。 */
     private long energyStored;
 
-    /** 用电机本 tick 是否在申请电力。 */
+    /** 用能机器本 tick 是否在申请红石流能。 */
     private boolean requestingPower;
 
     /** 累计统计数据。 */
@@ -331,7 +331,7 @@ public final class MachineInstance implements EnergyNode {
         return definition.logic().generate(this);
     }
 
-    /** 用电机：需求量由 MachineLogic 决定。 */
+    /** 用能机器：需求量由 MachineLogic 决定。 */
     @Override
     public long demand() {
         return definition.logic().demand(this);
@@ -400,13 +400,13 @@ public final class MachineInstance implements EnergyNode {
         markDirty();
     }
 
-    /** 机器是否正在申请电力（有活要干且电量不足）。 */
+    /** 机器是否正在申请红石流能（有活要干且缓冲里的 HRE 不足）。 */
     public boolean isRequestingPower() {
         return requestingPower;
     }
 
     /**
-     * 设置本 tick 是否申请电力。
+     * 设置本 tick 是否申请红石流能。
      *
      * <p>MachineLogic 在处理配方时调用：有活干就置 true，没活干置 false，
      * 网络会据此决定是否给它充电。</p>
@@ -415,7 +415,7 @@ public final class MachineInstance implements EnergyNode {
         this.requestingPower = value;
     }
 
-    /** 尝试从自身缓冲区扣除电量，电量不足返回 false 且不扣电。 */
+    /** 尝试从自身缓冲区扣除 HRE，HRE 不足返回 false 且不扣。 */
     public boolean consumeEnergy(long joules) {
         if (joules <= 0L) {
             return true;

@@ -75,7 +75,7 @@ public interface MachineLogic {
     }
 
     /**
-     * 作为发电机时，本 tick 向网络输出的焦耳数。
+     * 作为发电机时，本 tick 向网络输出的 HRE 数。
      *
      * <p>实现方应当自行扣减燃料并把产物计入 {@link MachineInstance#addGenerated(long)}。</p>
      */
@@ -84,14 +84,25 @@ public interface MachineLogic {
     }
 
     /**
-     * 作为用电机时，本 tick 希望从网络领取的焦耳数。
+     * 作为用能机器时，本 tick 希望从网络领取的 HRE 数。
      *
      * <p>推荐实现「缓冲区补满」模型：只有当机器确实有活要干（
      * {@link MachineInstance#requestPower(boolean)} 为真）时才返回需求，
-     * 否则返回 0，从而避免机器空转偷电。</p>
+     * 否则返回 0，从而避免机器空转偷取红石流能。</p>
      */
     default long demand(MachineInstance machine) {
         return 0L;
+    }
+
+    /**
+     * 界面上的「预览格」下标，没有则返回 -1。
+     *
+     * <p>预览格是<b>虚拟</b>的：里面的物品只是展示，不属于机器，
+     * 既不会写回机器状态也不会进存档。玩家点击它才真正结算一次生产。
+     * 目前只有增强工作台用它（{@link #hasVirtualOutput()} 为 true）。</p>
+     */
+    default int previewSlot() {
+        return -1;
     }
 
     /** 该机器是否参与能源网络。 */

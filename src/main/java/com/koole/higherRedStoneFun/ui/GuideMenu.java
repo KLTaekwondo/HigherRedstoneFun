@@ -191,7 +191,7 @@ public final class GuideMenu implements InventoryHolder {
 
         inventory.setItem(SLOT_INFO, simple(Material.BOOK,
                 "<gold>HigherRedStoneFun 图鉴",
-                "<gray>基础机器 · 高级电力机器 · 基因工程",
+                "<gray>基础机器 · 红石流能机器 · 基因工程",
                 "",
                 "<yellow>左键 <gray>物品查看详情"));
         inventory.setItem(SLOT_CLOSE, closeItem());
@@ -423,12 +423,12 @@ public final class GuideMenu implements InventoryHolder {
                 : simple(type.icon(), "<white>" + type.displayName(), "<dark_gray>机器类型");
         List<String> machineLore = new ArrayList<>();
         machineLore.add("<dark_gray>使用机器: <white>" + type.displayName());
-        machineLore.add(type.electric() ? "<dark_gray>需要电力" : "<dark_gray>燃料驱动");
+        machineLore.add(type.electric() ? "<dark_gray>需要红石流能" : "<dark_gray>燃料驱动（红石）");
         machineLore.add("<dark_gray>耗时 <white>"
                 + String.format("%.1f", recipe.durationTicks() / 20.0D) + " <dark_gray>秒");
         if (type.electric()) {
-            machineLore.add("<dark_gray>耗电 <red>"
-                    + Text.number(recipe.energyCost()) + " <dark_gray>J");
+            machineLore.add("<dark_gray>耗能 <red>"
+                    + Text.number(recipe.energyCost()) + " <dark_gray>HRE");
         }
         if (total > 1) {
             machineLore.add("");
@@ -739,14 +739,14 @@ public final class GuideMenu implements InventoryHolder {
             }
             if (definition.energyRole() != null) {
                 switch (definition.energyRole()) {
-                    case GENERATOR -> lore.add("<gray>产能: <red>" + definition.throughput() + " J/t");
-                    case CONSUMER -> lore.add("<gray>耗电: <red>" + definition.throughput() + " J/t");
-                    case STORAGE -> lore.add("<gray>储电: <red>"
-                            + Text.number(definition.bufferCapacity()) + " J");
+                    case GENERATOR -> lore.add("<gray>产能: <red>" + definition.throughput() + " HRE/t");
+                    case CONSUMER -> lore.add("<gray>耗能: <red>" + definition.throughput() + " HRE/t");
+                    case STORAGE -> lore.add("<gray>储能: <red>"
+                            + Text.number(definition.bufferCapacity()) + " HRE");
                 }
             }
             if (definition.usesFuel()) {
-                lore.add("<gray>燃料: <gold>可燃物");
+                lore.add("<gray>燃料: <gold>红石");
             }
             if (definition.hasRecipes()) {
                 lore.add("<gray>配方面板: <yellow>" + definition.recipeType().displayName());

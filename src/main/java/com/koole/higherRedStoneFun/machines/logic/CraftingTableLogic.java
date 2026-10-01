@@ -69,6 +69,47 @@ public final class CraftingTableLogic extends RecipeMachineLogic {
         return true;
     }
 
+    /** 预览格：点击它才合成，产物进入右侧成品区。 */
+    @Override
+    public int previewSlot() {
+        return RecipeType.CRAFTING_PREVIEW_SLOT;
+    }
+
+    /**
+     * 成品区能否容下这份产物。
+     *
+     * <p>合成前先问一次：装不下就直接拒绝，而不是先扣材料再把产物掉在地上。
+     * 这样「材料没了、产物也没进成品区」这种糊涂账不会出现。</p>
+     */
+    public boolean canStore(MachineInstance machine, ItemStack stack) {
+        if (stack == null || stack.getType().isAir()) {
+            return true;
+        }
+        int[] outSlots = machine.definition().recipeType().outputSlots();
+        List<ItemStack> simulated = new ArrayList<>(outSlots.length);
+        for (int slot : outSlots) {
+            ItemStack existing = machine.getSlot(slot);
+            simulated.add(existing == null ? null : existing.clone());
+        }
+        return placeInto(simulated, stack);
+    }
+
+    /** 把产物放进成品区（先叠到同类物品上，再占空格）。 */
+    public void store(MachineInstance machine, ItemStack stack) {
+        if (stack == null || stack.getType().isAir()) {
+            return;
+        }
+        int[] outSlots = machine.definition().recipeType().outputSlots();
+        List<ItemStack> slots = new ArrayList<>(outSlots.length);
+        for (int slot : outSlots) {
+            slots.add(machine.getSlot(slot));
+        }
+        placeInto(slots, stack);
+        for (int i = 0; i < outSlots.length; i++) {
+            machine.setSlot(outSlots[i], slots.get(i));
+        }
+    }
+
     /**
      * 计算当前输入对应的配方，没有则返回 null。
      *

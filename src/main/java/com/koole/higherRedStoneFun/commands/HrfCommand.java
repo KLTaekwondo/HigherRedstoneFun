@@ -62,7 +62,8 @@ public final class HrfCommand implements TabExecutor {
         sender.sendMessage(Text.mm("<dark_gray><st>                                                  "));
         sender.sendMessage(Text.mm("<gradient:#ff6b6b:#ffd93d><bold>HigherRedStoneFun</bold></gradient> <gray>v"
                 + plugin.getPluginMeta().getVersion()));
-        sender.sendMessage(Text.mm("<gray>三个模块: <white>基础机器</white> · <white>高级电力机器</white> · <white>基因工程"));
+        sender.sendMessage(Text.mm("<gray>三个模块: <white>基础机器</white> · <white>红石流能机器</white> · <white>基因工程"));
+        sender.sendMessage(Text.mm("<dark_gray>红石流能机器接入能源网络，能量单位为 <white>HRE</white><dark_gray>（Higher Redstone Energy）"));
         sender.sendMessage(Text.mm(""));
         sender.sendMessage(Text.mm("<yellow>/" + label + " guide <dark_gray>- 打开图鉴，浏览全部机器与配方"));
         sender.sendMessage(Text.mm("<yellow>/" + label + " give <物品ID> [数量] <dark_gray>- 获取物品 (需要权限)"));
@@ -242,7 +243,7 @@ public final class HrfCommand implements TabExecutor {
                 sb.append(" ");
             }
             if (type.electric()) {
-                sb.append("<dark_gray>[").append(Text.number(recipe.energyCost())).append(" J]");
+                sb.append("<dark_gray>[").append(Text.number(recipe.energyCost())).append(" HRE]");
             }
             sender.sendMessage(Text.mm(sb.toString()));
         }

@@ -4,7 +4,7 @@ main: com.koole.higherRedStoneFun.HigherRedStoneFun
 api-version: '26.3'
 load: POSTWORLD
 authors: [ Koole ]
-description: HigherRedStoneFun - 一个融合基础机器、高级电力机器与基因工程的科技插件 (v0.1)
+description: HigherRedStoneFun - 一个融合基础机器、红石流能机器与基因工程的科技插件 (v0.1)
 website: https://github.com/
 folia-supported: false
 

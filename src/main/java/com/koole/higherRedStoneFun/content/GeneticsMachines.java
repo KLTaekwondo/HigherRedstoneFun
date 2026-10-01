@@ -51,7 +51,7 @@ public final class GeneticsMachines {
                 .inventorySize(27)
                 .logic(new SequencerLogic(genetics, 1))
                 .lore("<gray>解析生物样本，读出 4 个基因位的等级")
-                .lore("<gray>耗电: <red>12 J/t")
+                .lore("<gray>耗能: <red>12 HRE/t")
                 .lore("<gold>需要: 生物样本 + 基因引物")
                 .build());
 
@@ -64,7 +64,7 @@ public final class GeneticsMachines {
                 .inventorySize(27)
                 .logic(new SequencerLogic(genetics, 2))
                 .lore("<gray>二代测序仪，解析出的基因起点更高")
-                .lore("<gray>耗电: <red>30 J/t")
+                .lore("<gray>耗能: <red>30 HRE/t")
                 .lore("<green>基因位期望值 +1")
                 .glow(true)
                 .build());
@@ -81,7 +81,7 @@ public final class GeneticsMachines {
                 .inventorySize(45)
                 .logic(new SplicerLogic(genetics, 0.12D))
                 .lore("<gray>把两个基因组逐位取优，合成为一个更好的基因组")
-                .lore("<gray>耗电: <red>20 J/t")
+                .lore("<gray>耗能: <red>20 HRE/t")
                 .lore("<gray>突变率: <light_purple>12%")
                 .lore("<gold>需要: 基因组 A + 基因组 B + 拼接酶")
                 .build());
@@ -95,7 +95,7 @@ public final class GeneticsMachines {
                 .inventorySize(45)
                 .logic(new SplicerLogic(genetics, 0.30D))
                 .lore("<gray>二代拼接机，突变率大幅提升")
-                .lore("<gray>耗电: <red>60 J/t")
+                .lore("<gray>耗能: <red>60 HRE/t")
                 .lore("<gray>突变率: <light_purple>30%")
                 .glow(true)
                 .build());
@@ -112,7 +112,7 @@ public final class GeneticsMachines {
                 .inventorySize(27)
                 .logic(new InjectorLogic(genetics, 1))
                 .lore("<gray>把基因组注入种子模板或空白胚胎")
-                .lore("<gray>耗电: <red>15 J/t")
+                .lore("<gray>耗能: <red>15 HRE/t")
                 .lore("<gold>需要: 空白模板 + 基因组 (+ 稳定剂可选)")
                 .build());
 
@@ -125,7 +125,7 @@ public final class GeneticsMachines {
                 .inventorySize(27)
                 .logic(new InjectorLogic(genetics, 2))
                 .lore("<gray>二代注入器，稳定剂效果更强")
-                .lore("<gray>耗电: <red>45 J/t")
+                .lore("<gray>耗能: <red>45 HRE/t")
                 .glow(true)
                 .build());
 
@@ -141,7 +141,7 @@ public final class GeneticsMachines {
                 .logic(new GrowthChamberLogic(genetics))
                 .period(20)
                 .lore("<gray>把改良种子的基因「变现」为实际产物")
-                .lore("<gray>耗电: <red>18 J/t</gray> <dark_gray>(每次培育)")
+                .lore("<gray>耗能: <red>18 HRE/t</gray> <dark_gray>(每次培育)")
                 .lore("<gold>放入改良种子，自动产出对应作物")
                 .lore("<green>基因等级越高，产出越多、越快")
                 .blank()
