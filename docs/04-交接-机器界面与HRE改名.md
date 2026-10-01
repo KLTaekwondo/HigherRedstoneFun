@@ -238,9 +238,34 @@ Copy-Item "build\libs\HigherRedStoneFun-0.1.0.jar" "testserver\plugins\" -Force
 ```
 继续开发 D:\Projects\HigherRedStoneFun（Paper 26.3 插件，Java 25）。
 
-先读 docs/04-交接-机器界面与HRE改名.md，那里面有完整的进度、槽位表和待办清单。
+════════════════════════════════════════════════════════
+第一步：先读文档，不要跳过
+════════════════════════════════════════════════════════
 
-这次的三个任务，按顺序做：
+docs/ 下已有 5 份文档，按这个顺序读：
+
+【必读 · 全篇读，共约 400 行】
+  1. docs/02b-架构要点速查.md          ← 先读这个，整体架构速查
+  2. docs/03-玩法升级与优化设计.md      ← 设计意图与取舍
+  3. docs/04-交接-机器界面与HRE改名.md  ← 当前进度、槽位表、本次任务
+
+【按需查 · 很大，不要整篇读，用 grep 定位】
+  4. docs/01-粘液科技玩法调研与核心统计.md   (768 行)
+  5. docs/02-Slimefun4源码架构分析.md        (1606 行)
+
+  ⚠️ 这两份是前期调研，只在需要参考粘液科技的具体做法时用 grep 查关键词，
+     不要整篇读进来——上下文会被撑爆。上一个会话就是因为上下文过长
+     触发 API 400 而中断的。
+
+【源码参考（要用时再查，同样不要整篇读）】
+  .research/Slimefun4/            粘液科技源码
+  .research/paper-api-sources/    Paper API 源码
+
+读完 1~3 之后，先跟我确认你理解的当前状态和待办清单，再动手。
+
+════════════════════════════════════════════════════════
+第二步：三件任务，按顺序做
+════════════════════════════════════════════════════════
 
 1. HRE 单位改名：机器说明里的 "J" 全部换成 "HRE"（例如 "8 J/t" → "8 HRE/t"）。
    涉及 PowerMachines / GeneticsMachines / GuideMenu / MachineRecipe /
@@ -250,6 +275,7 @@ Copy-Item "build\libs\HigherRedStoneFun-0.1.0.jar" "testserver\plugins\" -Force
    ItemGroup.POWER_MACHINES、GuideSection、GuideMenu 主页面简介、
    HrfCommand、PowerMachines 类注释、RecipeType 里的"电力熔炼/电力研磨"。
    同时删掉"焦耳(J)"这类旧单位文案。
+   （red：命名决定已在文档第二节定死，不要再重新讨论）
 
 3. 燃煤发电机改成红石发电机（hrf_coal_generator，在 PowerMachines 里）：
    改 displayName 和 lore，燃料说明改成红石。
@@ -261,7 +287,16 @@ Copy-Item "build\libs\HigherRedStoneFun-0.1.0.jar" "testserver\plugins\" -Force
   (a) 9 个输入槽全部有效（防 3×3 退化成 2×3）
   (b) 煤不能当燃料、红石可以
 
-工作流程：只编译 + 打包 jar，然后复制到 testserver\plugins\。
-不要起服务器、不要跑自检、不要读日志——我自己进游戏测。
-打包命令：.\gradlew.bat build --no-daemon -q
+════════════════════════════════════════════════════════
+工作流程（重要）
+════════════════════════════════════════════════════════
+
+只编译 + 打包 jar，然后复制到 testserver\plugins\。
+不要起服务器、不要跑 /hrf selftest、不要读日志——我自己进游戏测。
+
+  .\gradlew.bat build --no-daemon -q
+  Copy-Item "build\libs\HigherRedStoneFun-0.1.0.jar" "testserver\plugins\" -Force
+
+环境坑：JAVA_HOME 指向 Java 21（MC 自带），Paper 26.3 要 Java 25+；
+PowerShell 传 -D 参数要加引号；bat 文件必须 CRLF。
 ```
