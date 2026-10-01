@@ -1,55 +1,56 @@
 package com.koole.higherRedStoneFun.machines.logic;
 
 import org.bukkit.Material;
-import org.bukkit.Tag;
-
-import java.util.HashMap;
-import java.util.Map;
 
 /**
  * 燃料热值表。
  *
- * <p>相比直接调用 {@code Material.isFuel()}（原版只给一个固定燃烧时间），
- * 这里做了一层显式映射，好处是可以给特殊燃料（岩浆桶、烈焰粉、
- * 本插件的「压缩燃料棒」）设定更高的热值，形成一条可升级的燃料线。</p>
+ * <h2>红石是唯一的燃料</h2>
+ *
+ * <p>本插件的机器<b>不烧煤，只烧红石</b>。这是刻意的设计选择，理由是：</p>
+ *
+ * <ul>
+ *   <li><b>主题自洽</b>：插件叫 HigherRedStoneFun，机器靠红石运转才立得住。</li>
+ *   <li><b>认知简单</b>：玩家只需要记一条规则——「机器的燃料是红石」。
+ *       如果同时支持煤/木板/岩浆，玩家反而要记一堆。</li>
+ *   <li><b>给红石一个核心位置</b>：红石从「只用来做红石电路」变成贯穿整个
+ *       科技树的必需品——它既是燃料，也是电力层的原料。</li>
+ * </ul>
+ *
+ * <h2>为什么不做成「第三种能源」</h2>
+ *
+ * <p>「烧红石」和「烧煤」在机制上完全一样，只是物品不同。把它做成独立能源
+ * 只会多一套概念，玩法上没有任何新东西。所以红石归入<b>燃料层</b>，
+ * 作为其中（也是唯一）的燃料。</p>
+ *
+ * <p>三层结构：手动（增强工作台）→ 红石燃料（基础机器）→ 电力（高级机器）。</p>
  */
 public final class FuelValues {
 
-    private static final Map<Material, Integer> OVERRIDES = new HashMap<>();
+    /** 1 个红石能提供的运行 tick 数（= 80 秒机器运转）。 */
+    public static final int REDSTONE_TICKS = 1_600;
 
-    /** 原版燃料的默认倍率：把原版燃烧时间换算成本插件的 tick 数。 */
-    private static final int VANILLA_MULTIPLIER = 4;
-
-    /** 兜底值：未知但可燃烧的物品给 100 tick。 */
-    private static final int DEFAULT_TICKS = 100;
-
-    static {
-        // 高能燃料：给玩家明确的升级目标
-        OVERRIDES.put(Material.LAVA_BUCKET, 20_000);
-        OVERRIDES.put(Material.BLAZE_ROD, 2_400);
-        OVERRIDES.put(Material.BLAZE_POWDER, 1_200);
-        OVERRIDES.put(Material.COAL_BLOCK, 16_000);
-        OVERRIDES.put(Material.DRIED_KELP_BLOCK, 4_000);
-        OVERRIDES.put(Material.MAGMA_CREAM, 800);
-        OVERRIDES.put(Material.BAMBOO_BLOCK, 600);
-    }
+    /** 1 个红石块 = 9 个红石。 */
+    public static final int REDSTONE_BLOCK_TICKS = REDSTONE_TICKS * 9;
 
     private FuelValues() {
     }
 
-    /** 返回该物品作为燃料能提供的运行 tick 数，0 表示不可燃。 */
+    /**
+     * 返回该物品作为燃料能提供的运行 tick 数，0 表示不可燃。
+     *
+     * <p>只认红石与红石块。其它原版燃料（煤、木板、岩浆桶…）在这里
+     * <b>一律返回 0</b>——这是刻意的，不是遗漏。</p>
+     */
     public static int ticksFor(Material material) {
         if (material == null || material.isAir()) {
             return 0;
         }
-        Integer override = OVERRIDES.get(material);
-        if (override != null) {
-            return override;
+        if (material == Material.REDSTONE) {
+            return REDSTONE_TICKS;
         }
-        if (material.isFuel()) {
-            // 原版燃烧时间（tick）放大，使本插件机器明显快于熔炉
-            int vanilla = vanillaBurnTicks(material);
-            return vanilla > 0 ? vanilla * VANILLA_MULTIPLIER : DEFAULT_TICKS;
+        if (material == Material.REDSTONE_BLOCK) {
+            return REDSTONE_BLOCK_TICKS;
         }
         return 0;
     }
@@ -59,37 +60,8 @@ public final class FuelValues {
         return ticksFor(material) > 0;
     }
 
-    /**
-     * 原版燃烧时间。
-     *
-     * <p>Paper API 未直接暴露燃烧时间表，这里对常见燃料做一次近似，
-     * 其余可燃物统一按 200 tick 处理。</p>
-     */
-    private static int vanillaBurnTicks(Material material) {
-        if (material == Material.COAL || material == Material.CHARCOAL) {
-            return 1_600;
-        }
-        if (material == Material.COAL_BLOCK) {
-            return 16_000;
-        }
-        if (Tag.PLANKS.isTagged(material) || Tag.LOGS.isTagged(material)) {
-            return 300;
-        }
-        if (Tag.SAPLINGS.isTagged(material)) {
-            return 100;
-        }
-        if (Tag.WOOL.isTagged(material)) {
-            return 100;
-        }
-        if (material == Material.STICK || material == Material.BAMBOO) {
-            return 100;
-        }
-        if (material == Material.CRAFTING_TABLE || material == Material.CHEST) {
-            return 300;
-        }
-        if (material == Material.PAPER || material == Material.BOOK) {
-            return 100;
-        }
-        return 200;
+    /** 燃料的中文名，用于界面与提示。 */
+    public static String fuelName() {
+        return "红石";
     }
 }

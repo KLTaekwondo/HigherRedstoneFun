@@ -79,6 +79,7 @@ public final class PowerMachines {
                 .buffer(120_000L)
                 .inventorySize(9)
                 .logic(new ReactorLogic(400L))
+                .lore("<gray>全插件最强的电源，但会熔毁爆炸")
                 .lore("<dark_red><bold>终局发电机</bold>")
                 .lore("<gray>产能: <red>400 J/t</red> <dark_gray>(≈8,000 J/s)")
                 .lore("<gray>燃料槽: 下界合金碎片 / 远古残骸 / 烈焰棒")
@@ -169,8 +170,8 @@ public final class PowerMachines {
                 .throughput(120L)
                 .inventorySize(45)
                 .logic(RecipeMachineLogic.electric(120L))
-                .lore("<dark_purple><bold>终局合成设备</bold>")
                 .lore("<gray>在分子层面重组物质，产出稀有材料")
+                .lore("<dark_purple><bold>终局合成设备</bold>")
                 .lore("<gray>耗电: <red>120 J/t")
                 .glow(true)
                 .build());

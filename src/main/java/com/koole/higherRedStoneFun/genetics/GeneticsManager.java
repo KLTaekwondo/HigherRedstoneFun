@@ -62,11 +62,25 @@ public final class GeneticsManager {
         PersistentDataContainer pdc = meta.getPersistentDataContainer();
         pdc.set(keys.genome(), PersistentDataType.STRING, genome.serialize());
 
-        // 把基因信息写进 lore，让玩家一眼看出好坏
+        // 先按物品定义重建基础描述，再追加一行基因摘要。
+        //
+        // 为什么是「重建」而不是「追加」：applyGenome 会被重复调用
+        // （例如刷新显示），如果只是往现有 lore 里塞，基因行会越堆越多。
+        // 如果直接 meta.lore(基因行) 覆盖，又会把物品自己的描述冲掉，
+        // 玩家只看到「基因 生3 产1 抗0 活2」而不知道这是什么种子。
         java.util.List<net.kyori.adventure.text.Component> lore = new java.util.ArrayList<>();
-        for (String line : genome.describe()) {
-            lore.add(com.koole.higherRedStoneFun.core.Text.mm(line));
+        String id = com.koole.higherRedStoneFun.items.ItemRegistry.get().idOf(stack);
+        com.koole.higherRedStoneFun.items.HrfItem base =
+                id == null ? null : com.koole.higherRedStoneFun.items.ItemRegistry.get().get(id);
+        if (base != null) {
+            for (String line : base.lore()) {
+                lore.add(line.isEmpty()
+                        ? net.kyori.adventure.text.Component.empty()
+                        : com.koole.higherRedStoneFun.core.Text.mm(line));
+            }
         }
+        lore.add(com.koole.higherRedStoneFun.core.Text.mm(
+                "<gray>基因 <white>" + genome.coloredSummary()));
         meta.lore(lore);
 
         if (genome.isPerfect()) {

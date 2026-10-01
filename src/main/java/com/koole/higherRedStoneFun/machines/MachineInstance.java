@@ -56,6 +56,30 @@ public final class MachineInstance implements EnergyNode {
     private EnergyNetwork network;
     private boolean dirty;
 
+    /**
+     * 多方块结构是否成型。
+     *
+     * <p>缓存值，由 {@link #recheckStructure()} 刷新。之所以要缓存而不是每次
+     * 实时检测：tick 里会频繁用到，而实时检测要读 2~3 个方块的材质。</p>
+     */
+    private boolean structureComplete;
+
+    /** 组件方块（除控制器外）的坐标，拆解时用于清理与判断归属。 */
+    private final java.util.List<Location> structureBlocks = new java.util.ArrayList<>();
+
+    /**
+     * 控制器是否是玩家用「自定义机器物品」放置的。
+     *
+     * <p>这决定拆掉机器时该还回什么：</p>
+     * <ul>
+     *   <li>true —— 玩家用的是自定义物品，拆解时归还自定义机器物品（保持身份）</li>
+     *   <li>false —— 玩家是用普通方块（如原版工作台）搭出结构的，
+     *       拆解时必须<b>归还那个普通方块</b>，绝不能把原版工作台
+     *       变成自定义物品——那等于凭空造出了一个本不存在的物品。</li>
+     * </ul>
+     */
+    private boolean placedAsMachineItem;
+
     public MachineInstance(Location location, MachineDefinition definition) {
         this.location = location.clone();
         this.definition = definition;
@@ -94,6 +118,87 @@ public final class MachineInstance implements EnergyNode {
 
     public boolean isOwnedBy(UUID uuid) {
         return owner == null || owner.equals(uuid);
+    }
+
+    // ------------------------------------------------------------------
+    // 多方块结构
+    // ------------------------------------------------------------------
+
+    /** 结构是否已成型（单方块机器恒为 true）。 */
+    public boolean isStructureComplete() {
+        if (!definition.isMultiblock()) {
+            return true;
+        }
+        return structureComplete;
+    }
+
+    /**
+     * 重新检测结构并更新缓存。返回是否成型。
+     *
+     * <p>同时会按当前定义<b>重建组件坐标列表</b>。早期版本只在成型时记录、
+     * 失效时清空，导致结构坐标永久丢失（存档也会跟着丢），
+     * 于是「拆掉铁块再放回去」无法恢复判定。</p>
+     */
+    public boolean recheckStructure() {
+        if (!definition.isMultiblock()) {
+            structureComplete = true;
+            structureBlocks.clear();
+            return true;
+        }
+        boolean matched = definition.structure().matches(location);
+        if (matched != structureComplete) {
+            markDirty();
+        }
+        structureComplete = matched;
+        // 组件坐标是「结构应该占据哪些位置」，与是否成型无关，始终重建。
+        // 早期版本只清空不重建，导致坐标永久丢失（存档也会丢），
+        // 挖掉一块后再也找不到结构归属。回归测试见 SelfTest#testSequentialStructureDamage。
+        structureBlocks.clear();
+        structureBlocks.addAll(definition.structure().extraBlockLocations(location));
+        return matched;
+    }
+
+    /** 结构组件方块（除控制器外）的坐标。 */
+    public java.util.List<Location> structureBlocks() {
+        return java.util.Collections.unmodifiableList(structureBlocks);
+    }
+
+    /** 记录结构组件坐标（成型时调用）。 */
+    public void setStructureBlocks(java.util.List<Location> blocks) {
+        structureBlocks.clear();
+        structureBlocks.addAll(blocks);
+    }
+
+    /** 判断某个坐标是否属于这台机器的结构。
+     *
+     * <p>用于「玩家挖掉结构中的一格时，要能定位到是哪台机器」。</p>
+     */
+    public boolean ownsStructureBlock(Location loc) {
+        if (loc == null || loc.getWorld() != location.getWorld()) {
+            return false;
+        }
+        for (Location block : structureBlocks) {
+            if (block.getBlockX() == loc.getBlockX()
+                    && block.getBlockY() == loc.getBlockY()
+                    && block.getBlockZ() == loc.getBlockZ()) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * 控制器是否由自定义机器物品放置。
+     *
+     * <p>false 表示玩家是用普通方块搭出结构的，拆解时应归还那个普通方块。</p>
+     */
+    public boolean isPlacedAsMachineItem() {
+        return placedAsMachineItem;
+    }
+
+    public void setPlacedAsMachineItem(boolean value) {
+        this.placedAsMachineItem = value;
+        markDirty();
     }
 
     // ------------------------------------------------------------------
@@ -188,6 +293,13 @@ public final class MachineInstance implements EnergyNode {
     public void consumeFuelTick() {
         if (fuelTicks > 0) {
             fuelTicks--;
+        }
+    }
+
+    /** 一次扣除多 tick 燃料（手动工作台按「次」消耗，不是按 tick）。 */
+    public void consumeFuel(int ticks) {
+        if (ticks > 0) {
+            fuelTicks = Math.max(0, fuelTicks - ticks);
         }
     }
 

@@ -182,7 +182,29 @@ public final class Genome {
         return sb.toString();
     }
 
-    /** 生成多行详细展示，用于物品 lore。 */
+    /**
+     * 带颜色的紧凑摘要，用于物品 lore 的<b>单行</b>展示。
+     *
+     * <p>格式：{@code 生3 产1 抗0 活2}，等级越高越亮，
+     * 满级为金色。这样玩家扫一眼就知道这颗种子值不值得留，
+     * 而完整的条形图放在图鉴里。</p>
+     */
+    public String coloredSummary() {
+        StringBuilder sb = new StringBuilder();
+        for (Gene gene : Gene.values()) {
+            if (sb.length() > 0) {
+                sb.append(' ');
+            }
+            int level = level(gene);
+            String color = level >= MAX_LEVEL ? "gold" : (level > 0 ? "green" : "dark_gray");
+            sb.append('<').append(color).append('>')
+                    .append(gene.shortName()).append(level)
+                    .append("</").append(color).append('>');
+        }
+        return sb.toString();
+    }
+
+    /** 生成多行详细展示，用于<b>图鉴</b>（不再写进物品 lore）。 */
     public List<String> describe() {
         List<String> lines = new ArrayList<>();
         for (Gene gene : Gene.values()) {

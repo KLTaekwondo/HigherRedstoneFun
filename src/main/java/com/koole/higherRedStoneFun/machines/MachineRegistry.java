@@ -39,29 +39,19 @@ public final class MachineRegistry {
         // 同时把它注册成一个可获得的自定义物品
         if (!ItemRegistry.get().exists(definition.id())) {
             HrfItem.Builder builder = HrfItem.builder(
-                            definition.id(), definition.icon(), "<white>" + definition.displayName(), definition.group())
-                    .lore("<dark_gray>机器方块")
-                    .blank();
+                    definition.id(), definition.icon(), "<white>" + definition.displayName(), definition.group());
 
-            for (String line : definition.lore()) {
-                builder.lore(line);
+            // 物品上只留「一句话说明」——其余全部交给图鉴。
+            //
+            // 早期版本把分组名、完整设定、产能、燃料、配方类型、结构需求
+            // 全塞进物品 lore，一台机器能有 8~15 行，背包里完全没法看。
+            // 判断依据很简单：物品 tooltip 是「在背包里快速认出这是什么东西」，
+            // 查资料是图鉴的职责。这里取 lore 的第一行作为摘要。
+            String[] lore = definition.lore();
+            if (lore.length > 0 && !lore[0].isEmpty()) {
+                builder.lore(lore[0]);
             }
-
-            // 自动附加机器通用信息
-            if (definition.energyRole() != null) {
-                switch (definition.energyRole()) {
-                    case GENERATOR -> builder.lore("<gray>产能: <red>" + definition.throughput() + " J/t");
-                    case CONSUMER -> builder.lore("<gray>耗电: <red>" + definition.throughput() + " J/t");
-                    case STORAGE -> builder.lore("<gray>储电: <red>" + definition.bufferCapacity() + " J");
-                }
-            }
-            if (definition.usesFuel()) {
-                builder.lore("<gray>燃料: <gold>可燃物</gold> <dark_gray>(" + definition.fuelTicksPerUnit() + " tick/单位)");
-            }
-            if (definition.hasRecipes()) {
-                builder.lore("<gray>配方类型: <yellow>" + definition.recipeType().displayName());
-            }
-            builder.blank().lore("<yellow>右键放置 / 打开界面");
+            builder.lore("<dark_gray>左键查看详情");
 
             if (definition.glow()) {
                 builder.glow(true);

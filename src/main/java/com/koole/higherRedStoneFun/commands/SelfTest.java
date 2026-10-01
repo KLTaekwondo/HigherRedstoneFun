@@ -66,6 +66,12 @@ public final class SelfTest {
         testCraftingTableSafety();
         testTechTreeEntryPoint();
         testEconomyLoops();
+        testVanillaRecipeItemMatching();
+        testMultiblockStructure();
+        testAutoFormation();
+        testGuideMenuLayout();
+        testDismantleReturnsOriginal();
+        testSequentialStructureDamage();
 
         for (String line : results) {
             sender.sendMessage(Text.mm(line));
@@ -889,6 +895,700 @@ public final class SelfTest {
             }
         }
         check("碳循环不构成无损自循环", carbonSane, carbonDetail);
+    }
+
+    // ------------------------------------------------------------------
+    // 11. 原版配方的物品匹配（安全关键）
+    // ------------------------------------------------------------------
+
+    /**
+     * 验证原版工作台配方能否区分「自定义物品」与「同名原版物品」。
+     *
+     * <p>这是安全关键项：增强工作台的配方需要「机器框架」（铁块外观 +
+     * 自定义 PDC 标记）。如果匹配逻辑忽略 PDC，玩家就能用<b>普通铁块</b>
+     * 冒充机器框架，直接跳过整条前置产线。</p>
+     *
+     * <p>{@code RecipeChoice.ExactChoice.test()} 内部用的是
+     * {@link org.bukkit.inventory.ItemStack#isSimilar}。本测试实测它在
+     * 当前服务端版本上是否真的比较 PDC。</p>
+     */
+    private void testVanillaRecipeItemMatching() {
+        section("原版配方物品匹配 (安全)");
+
+        ItemRegistry registry = ItemRegistry.get();
+        ItemStack custom = registry.create("hrf_machine_frame", 1);
+        ItemStack plain = new ItemStack(Material.IRON_BLOCK, 1);
+
+        // 两者外观相同（都是铁块），只是 PDC 不同
+        check("自定义物品与原版物品外观相同",
+                custom.getType() == plain.getType(),
+                custom.getType().name());
+
+        // ---- 关键：isSimilar 是否区分 PDC ----
+        boolean similar = custom.isSimilar(plain);
+        check("isSimilar 能区分自定义物品与原版物品",
+                !similar,
+                similar ? "【危险】相同 -> 玩家可用普通铁块冒充机器框架"
+                        : "不同 ✓ 身份可区分");
+
+        // ---- RecipeChoice.exactChoice 的实际匹配行为 ----
+        var choice = org.bukkit.inventory.RecipeChoice.exactChoice(custom);
+        boolean acceptsCustom = choice.test(custom);
+        boolean acceptsPlain = choice.test(plain);
+        check("exactChoice 接受真正的自定义物品", acceptsCustom,
+                acceptsCustom ? "接受 ✓" : "拒绝 ✗ (配方无法使用)");
+        check("exactChoice 拒绝同名原版物品", !acceptsPlain,
+                acceptsPlain ? "【危险】接受 -> 可用普通铁块冒充" : "拒绝 ✓");
+
+        // ---- 兜底：确认我们自己的 sameItem 更严格 ----
+        check("ItemRegistry.sameItem 区分两者",
+                !registry.sameItem(custom, plain),
+                "插件内部判定不受 isSimilar 影响 ✓");
+
+        // ---- 库存告警 ----
+        if (similar || acceptsPlain) {
+            check("【需要修复】原版配方存在冒充风险", false,
+                    "应改用更严格的校验方式（见 BootstrapRecipes 注释）");
+        } else {
+            check("原版配方无冒充风险", true, "PDC 比较生效 ✓");
+        }
+    }
+
+    // ------------------------------------------------------------------
+    // 12. 多方块结构（含数据安全）
+    // ------------------------------------------------------------------
+
+    /**
+     * 验证多方块结构：成型判定、加成解锁、以及最关键的<b>数据安全</b>。
+     *
+     * <p>结构最容易引入的 bug 是「拆结构把机器一起弄丢」。
+     * 设计原则是：<b>挖掉结构组件只失去加成，机器与内部物品必须安全</b>。</p>
+     */
+    private void testMultiblockStructure() {
+        section("多方块结构");
+
+        MachineDefinition definition = MachineRegistry.get().get("hrf_enhanced_crafting_table");
+        if (definition == null || !definition.isMultiblock()) {
+            check("增强工作台已配置结构", false, "未配置");
+            return;
+        }
+        check("增强工作台已配置结构", true, definition.structure().describe());
+
+        World world = plugin.getServer().getWorlds().get(0);
+        Location base = new Location(world, 3060, 200, 3060);
+        try {
+            world.getChunkAt(base).load();
+        } catch (Exception ex) {
+            check("测试区块可加载", false, ex.toString());
+            return;
+        }
+
+        // 备份并清空测试区域
+        Block controller = base.getBlock();
+        Block body = base.clone().add(0, 1, 0).getBlock();
+        Block casing = base.clone().add(0, 2, 0).getBlock();
+        Material originalController = controller.getType();
+        Material originalBody = body.getType();
+        Material originalCasing = casing.getType();
+
+        try {
+            // ---- 1. 结构不完整时判定为未成型 ----
+            controller.setType(Material.CRAFTING_TABLE, false);
+            body.setType(Material.AIR, false);
+            casing.setType(Material.AIR, false);
+
+            MachineInstance machine = new MachineInstance(base, definition);
+            machine.setStructureBlocks(definition.structure().extraBlockLocations(base));
+            machine.recheckStructure();
+            check("结构缺失时判定未成型", !machine.isStructureComplete(),
+                    "未成型 ✓");
+
+            String missing = definition.structure().describeMissing(base);
+            check("能指出缺哪一块", !missing.isEmpty(), missing);
+
+            // ---- 2. 搭好结构后成型 ----
+            body.setType(Material.IRON_BLOCK, false);
+            casing.setType(Material.GLASS, false);
+            machine.recheckStructure();
+            check("搭好结构后成型", machine.isStructureComplete(), "成型 ✓");
+
+            // ---- 3. 染色玻璃也应该算数（宽容匹配）----
+            casing.setType(Material.LIGHT_BLUE_STAINED_GLASS, false);
+            machine.recheckStructure();
+            check("染色玻璃同样有效", machine.isStructureComplete(),
+                    "LIGHT_BLUE_STAINED_GLASS 通过 ✓");
+
+            // 玻璃板也应该算
+            casing.setType(Material.GLASS_PANE, false);
+            machine.recheckStructure();
+            check("玻璃板同样有效", machine.isStructureComplete(), "GLASS_PANE 通过 ✓");
+
+            // 换成非玻璃应该失效
+            casing.setType(Material.STONE, false);
+            machine.recheckStructure();
+            check("非玻璃方块不成立", !machine.isStructureComplete(), "STONE 被拒绝 ✓");
+
+            // 恢复成玻璃
+            casing.setType(Material.GLASS, false);
+            machine.recheckStructure();
+            check("恢复玻璃后重新成型", machine.isStructureComplete(), "恢复 ✓");
+
+            // ---- 4. 精密零件门控 ----
+            var tableLogic = definition.logic();
+            check("电路板属于精密零件",
+                    com.koole.higherRedStoneFun.machines.logic.CraftingTableLogic
+                            .isPrecisionPart("hrf_circuit_board"),
+                    "已标记 ✓");
+            check("铁板不属于精密零件",
+                    !com.koole.higherRedStoneFun.machines.logic.CraftingTableLogic
+                            .isPrecisionPart("hrf_iron_plate"),
+                    "普通零件 ✓");
+
+            // ---- 5. 数据安全：拆掉结构组件不能影响机器与内部物品 ----
+            Location loc = base;
+            plugin.machines().add(machine);
+            machine.setSlot(11, ItemRegistry.get().create("hrf_iron_plate", 9));
+            machine.setSlot(0, new ItemStack(Material.COAL, 5));
+
+            int itemsBefore = 0;
+            for (ItemStack stack : machine.contents()) {
+                if (stack != null && !stack.getType().isAir()) {
+                    itemsBefore += stack.getAmount();
+                }
+            }
+
+            // 拆掉玻璃
+            casing.setType(Material.AIR, false);
+            boolean wasComplete = machine.isStructureComplete();
+            machine.setStructureBlocks(java.util.List.of());
+            machine.recheckStructure();
+
+            check("拆结构组件后机器仍然存在",
+                    plugin.machines().isMachine(loc), "机器未被删除 ✓");
+            check("拆结构组件后状态变为未成型",
+                    wasComplete && !machine.isStructureComplete(), "未成型 ✓");
+
+            int itemsAfter = 0;
+            for (ItemStack stack : machine.contents()) {
+                if (stack != null && !stack.getType().isAir()) {
+                    itemsAfter += stack.getAmount();
+                }
+            }
+            check("【数据安全】拆结构不会丢失内部物品",
+                    itemsBefore == itemsAfter && itemsBefore > 0,
+                    "拆前 " + itemsBefore + " 件 -> 拆后 " + itemsAfter + " 件");
+
+            // ---- 6. 拆控制器才应该掉机器 ----
+            plugin.machines().remove(loc);
+            check("拆控制器才移除机器",
+                    !plugin.machines().isMachine(loc), "已移除 ✓");
+
+        } catch (Exception ex) {
+            check("多方块测试无异常", false, ex.toString());
+        } finally {
+            controller.setType(originalController == null ? Material.AIR : originalController, false);
+            body.setType(originalBody == null ? Material.AIR : originalBody, false);
+            casing.setType(originalCasing == null ? Material.AIR : originalCasing, false);
+        }
+    }
+
+    // ------------------------------------------------------------------
+    // 13. 结构自动成型（回归测试）
+    // ------------------------------------------------------------------
+
+    /**
+     * 回归测试：玩家用**普通方块**搭出结构也应该成型。
+     *
+     * <p>早期版本要求必须拿着 {@code /hrf give} 的自定义物品放置控制器。
+     * 玩家在创造模式下从背包拿原版工作台放下（最自然的操作），
+     * 系统完全不认识它，叠再多方块都没反应——表现为「多方块结构失败」。</p>
+     */
+    private void testAutoFormation() {
+        section("结构自动成型 (回归)");
+
+        World world = plugin.getServer().getWorlds().get(0);
+        Location base = new Location(world, 3080, 200, 3080);
+        try {
+            world.getChunkAt(base).load();
+        } catch (Exception ex) {
+            check("测试区块可加载", false, ex.toString());
+            return;
+        }
+
+        Block controller = base.getBlock();
+        Block body = base.clone().add(0, 1, 0).getBlock();
+        Block casing = base.clone().add(0, 2, 0).getBlock();
+        Material o1 = controller.getType();
+        Material o2 = body.getType();
+        Material o3 = casing.getType();
+
+        try {
+            // 用【原版方块】搭结构，不放任何自定义物品
+            controller.setType(Material.CRAFTING_TABLE, false);
+            body.setType(Material.IRON_BLOCK, false);
+            casing.setType(Material.GLASS, false);
+
+            // 确认这个位置没有被注册过
+            plugin.machines().remove(base);
+
+            MachineInstance formed = com.koole.higherRedStoneFun.machines.StructureFormation
+                    .tryForm(plugin.machines(), base);
+
+            check("【回归】原版方块搭出的结构能自动成型",
+                    formed != null,
+                    formed == null ? "未成型 ✗（玩家会看到「什么都没发生」）"
+                            : formed.definition().displayName() + " ✓");
+            check("成型后已注册到管理器",
+                    plugin.machines().isMachine(base), "已注册 ✓");
+
+            if (formed != null) {
+                check("成型后结构状态为完整", formed.isStructureComplete(), "完整 ✓");
+            }
+
+            // 清理，再测「缺一块不成型」
+            plugin.machines().remove(base);
+            casing.setType(Material.AIR, false);
+            MachineInstance incomplete = com.koole.higherRedStoneFun.machines.StructureFormation
+                    .tryForm(plugin.machines(), base);
+            check("结构不完整时不会误成型", incomplete == null,
+                    incomplete == null ? "正确拒绝 ✓" : "误成型 ✗");
+
+            plugin.machines().remove(base);
+        } catch (Exception ex) {
+            check("自动成型测试无异常", false, ex.toString());
+        } finally {
+            controller.setType(o1 == null ? Material.AIR : o1, false);
+            body.setType(o2 == null ? Material.AIR : o2, false);
+            casing.setType(o3 == null ? Material.AIR : o3, false);
+        }
+    }
+
+    // ------------------------------------------------------------------
+    // 14. 图鉴界面布局（回归测试）
+    // ------------------------------------------------------------------
+
+    /**
+     * 回归测试：图鉴的按钮槽位不能冲突，返回/关闭必须可达。
+     *
+     * <p>早期版本把「信息」和「返回」都放在 slot 49，而监听器对 49
+     * 无条件 return，导致<b>返回按钮永远点不动</b>。</p>
+     */
+    private void testGuideMenuLayout() {
+        section("图鉴界面布局 (回归)");
+
+        int infoSlot = com.koole.higherRedStoneFun.ui.GuideMenu.SLOT_INFO;
+        int closeSlot = com.koole.higherRedStoneFun.ui.GuideMenu.SLOT_CLOSE;
+        int backSlot = com.koole.higherRedStoneFun.ui.GuideMenu.SLOT_BACK;
+        int prevPage = com.koole.higherRedStoneFun.ui.GuideMenu.SLOT_PREV_PAGE;
+        int nextPage = com.koole.higherRedStoneFun.ui.GuideMenu.SLOT_NEXT_PAGE;
+
+        // ---- 底部按钮区不得互相冲突 ----
+        int[] bottomButtons = {backSlot, prevPage, infoSlot, nextPage, closeSlot};
+        boolean bottomConflict = false;
+        for (int i = 0; i < bottomButtons.length; i++) {
+            for (int j = i + 1; j < bottomButtons.length; j++) {
+                if (bottomButtons[i] == bottomButtons[j]) {
+                    bottomConflict = true;
+                }
+            }
+        }
+        check("底部按钮互不冲突", !bottomConflict,
+                bottomConflict ? "冲突 ✗" : backSlot + "/" + prevPage + "/" + infoSlot
+                        + "/" + nextPage + "/" + closeSlot);
+
+        boolean allInBottomRow = true;
+        for (int slot : bottomButtons) {
+            if (slot < 36 || slot > 44) {
+                allInBottomRow = false;
+            }
+        }
+        check("底部按钮都在最后一行（36-44）", allInBottomRow, "底行 ✓");
+
+        // ---- 列表页内容区不得压到按钮 ----
+        boolean listConflict = false;
+        for (int slot = 0; slot < com.koole.higherRedStoneFun.ui.GuideMenu.LIST_PAGE_SIZE; slot++) {
+            for (int button : bottomButtons) {
+                if (slot == button) {
+                    listConflict = true;
+                }
+            }
+        }
+        check("列表页内容区不与按钮冲突", !listConflict,
+                listConflict ? "冲突 ✗" : "0-" + (com.koole.higherRedStoneFun.ui.GuideMenu.LIST_PAGE_SIZE - 1)
+                        + " 内容 / 36-44 按钮 ✓");
+
+        // ---- 主页面大类槽位不得压到按钮 ----
+        boolean mainConflict = false;
+        for (int slot : com.koole.higherRedStoneFun.listeners.GuideMenuListener.mainSlots()) {
+            for (int button : bottomButtons) {
+                if (slot == button) {
+                    mainConflict = true;
+                }
+            }
+        }
+        check("主页面大类槽位不与按钮冲突", !mainConflict,
+                mainConflict ? "冲突 ✗" : "无冲突 ✓");
+
+        // ---- 详情页布局（红顶 / 蓝底 / 绿框 / 九宫格）----
+        int subjectSlot = com.koole.higherRedStoneFun.ui.GuideMenu.SLOT_SUBJECT;
+        int previewSlot = com.koole.higherRedStoneFun.ui.GuideMenu.SLOT_PREVIEW;
+        int currentItemSlot = com.koole.higherRedStoneFun.ui.GuideMenu.SLOT_CURRENT_ITEM;
+        int[] grid = com.koole.higherRedStoneFun.ui.GuideMenu.SLOT_RECIPE_GRID;
+        int[] rowTop = com.koole.higherRedStoneFun.ui.GuideMenu.ROW_TOP;
+        int[] rowBottom = com.koole.higherRedStoneFun.ui.GuideMenu.ROW_BOTTOM;
+        int[] usageSlots = com.koole.higherRedStoneFun.ui.GuideMenu.USAGE_SLOTS;
+        int[] decorations = com.koole.higherRedStoneFun.ui.GuideMenu.DECORATION_SLOTS;
+
+        check("九宫格是 3x3 共 9 格", grid.length == 9, grid.length + " 格");
+        check("九宫格位于第二三四行的四五六列",
+                grid[0] == 12 && grid[4] == 22 && grid[8] == 32 && grid[4] - grid[0] == 10,
+                "12,13,14 / 21,22,23 / 30,31,32 ✓");
+
+        check("主题位在第三行第二列", subjectSlot == 19, "slot " + subjectSlot);
+        check("预览位在第三行第八列", previewSlot == 25, "slot " + previewSlot);
+        check("当前物品位在最后一行正中", currentItemSlot == 40, "slot " + currentItemSlot);
+        check("当前物品位就是原来的信息纸位置（不被两处覆盖）",
+                currentItemSlot == com.koole.higherRedStoneFun.ui.GuideMenu.SLOT_INFO,
+                "SLOT_CURRENT_ITEM == SLOT_INFO == " + currentItemSlot + " ✓");
+
+        // 用途翻页按钮必须在当前物品位左右
+        int usagePrev = com.koole.higherRedStoneFun.ui.GuideMenu.SLOT_USAGE_PREV;
+        int usageNext = com.koole.higherRedStoneFun.ui.GuideMenu.SLOT_USAGE_NEXT;
+        check("用途翻页在当前物品位左右",
+                usagePrev == currentItemSlot - 2 && usageNext == currentItemSlot + 2,
+                usagePrev + " / " + currentItemSlot + " / " + usageNext + " ✓");
+
+        // ---- 中间三行必须完全留空（不放灰边框、不放绿框）----
+        check("详情页中间区域没有装饰方块", decorations.length == 0,
+                decorations.length == 0 ? "全部留空 ✓" : "仍有 " + decorations.length + " 个装饰位 ✗");
+
+        // 三个标签的中间区域必须一致：没有谁偷偷多画装饰
+        java.util.Set<Integer> contentOnly = new java.util.HashSet<>();
+        for (int slot = 9; slot <= 35; slot++) {
+            contentOnly.add(slot);
+        }
+        boolean anyDecorationInside = false;
+        for (int slot : decorations) {
+            if (contentOnly.contains(slot)) {
+                anyDecorationInside = true;
+            }
+        }
+        check("中间三行不掺入装饰元素", !anyDecorationInside,
+                anyDecorationInside ? "有装饰落在 9-35 ✗" : "9-35 只放内容 ✓");
+
+        check("红顶行是第 1 行", rowTop.length == 9 && rowTop[0] == 0 && rowTop[8] == 8,
+                "0-8 ✓");
+        check("蓝底行是最后一行", rowBottom.length == 9 && rowBottom[0] == 36 && rowBottom[8] == 44,
+                "36-44 ✓");
+
+        // 标签栏必须在红顶行内
+        int tabStart = com.koole.higherRedStoneFun.ui.GuideMenu.TAB_BAR_START;
+        int tabMax = com.koole.higherRedStoneFun.ui.GuideMenu.TAB_BAR_MAX;
+        boolean tabInTopRow = tabStart >= 0 && (tabStart + tabMax - 1) <= 8;
+        check("标签栏位于红顶行内", tabInTopRow,
+                tabInTopRow ? "槽位 " + tabStart + "~" + (tabStart + tabMax - 1) + " ✓" : "越界 ✗");
+
+        // 标签栏不能压在主题位/预览位/九宫格上
+        boolean tabConflict = false;
+        String tabConflictDetail = "";
+        for (int i = 0; i < tabMax; i++) {
+            int slot = tabStart + i;
+            if (slot == subjectSlot || slot == previewSlot) {
+                tabConflict = true;
+                tabConflictDetail = "与内容位（" + slot + "）冲突";
+            }
+            for (int g : grid) {
+                if (slot == g) {
+                    tabConflict = true;
+                    tabConflictDetail = "与九宫格（" + g + "）冲突";
+                }
+            }
+        }
+        check("标签栏不与内容位或九宫格冲突", !tabConflict,
+                tabConflict ? tabConflictDetail + " ✗" : "无冲突 ✓");
+
+        // ---- 底部按钮必须在蓝底行内 ----
+        boolean buttonsInBottomRow = true;
+        for (int b : bottomButtons) {
+            if (b < 36 || b > 44) {
+                buttonsInBottomRow = false;
+            }
+        }
+        check("底部按钮位于蓝底行内", buttonsInBottomRow, "36-44 ✓");
+
+        // 标签数量不能超过标签栏容量
+        int tabCount = com.koole.higherRedStoneFun.ui.GuideTab.values().length;
+        check("标签数量适配标签栏", tabCount <= tabMax,
+                tabCount + " 个标签 / " + tabMax + " 个位置");
+
+        // ---- 详情页所有内容槽位必须唯一（防再犯「提示被覆盖」的错）----
+        List<Integer> detailSlots = new ArrayList<>();
+        detailSlots.add(subjectSlot);
+        detailSlots.add(previewSlot);
+        detailSlots.add(com.koole.higherRedStoneFun.ui.GuideMenu.SLOT_PREV_RECIPE);
+        detailSlots.add(com.koole.higherRedStoneFun.ui.GuideMenu.SLOT_NEXT_RECIPE);
+        for (int i = 0; i < tabMax; i++) {
+            detailSlots.add(tabStart + i);
+        }
+        for (int slot : grid) {
+            detailSlots.add(slot);
+        }
+        for (int slot : com.koole.higherRedStoneFun.ui.GuideMenu.USAGE_SLOTS) {
+            detailSlots.add(slot);
+        }
+        for (int button : bottomButtons) {
+            detailSlots.add(button);
+        }
+        java.util.Set<Integer> seen = new java.util.HashSet<>();
+        int duplicate = -1;
+        for (int slot : detailSlots) {
+            if (!seen.add(slot)) {
+                duplicate = slot;
+                break;
+            }
+        }
+        check("详情页所有槽位唯一（防提示被覆盖）", duplicate < 0,
+                duplicate < 0 ? detailSlots.size() + " 个槽位无重叠 ✓" : "槽位 " + duplicate + " 重复 ✗");
+
+        // ---- ItemGroup 都要能映射到大类 ----
+        check("每个 ItemGroup 都有对应大类",
+                com.koole.higherRedStoneFun.listeners.GuideMenuListener.allGroupsMapped(),
+                "5 个归类 → 4 个大类 ✓");
+
+        // ---- 大类数量必须放得下主页面槽位 ----
+        int sectionCount = com.koole.higherRedStoneFun.ui.GuideSection.values().length;
+        int mainSlotCount = com.koole.higherRedStoneFun.listeners.GuideMenuListener.mainSlots().size();
+        check("大类数量适配主页面槽位", sectionCount <= mainSlotCount,
+                sectionCount + " 个大类 / " + mainSlotCount + " 个位置");
+
+        // ---- 分页必须能装下最大的分类（基因工程 44+ 物品）----
+        int pageSize = com.koole.higherRedStoneFun.ui.GuideMenu.LIST_PAGE_SIZE;
+        int largest = 0;
+        String largestName = "";
+        var guide = new com.koole.higherRedStoneFun.ui.GuideMenu();
+        for (com.koole.higherRedStoneFun.ui.GuideSection s
+                : com.koole.higherRedStoneFun.ui.GuideSection.values()) {
+            int n = guide.itemsOf(s).size();
+            if (n > largest) {
+                largest = n;
+                largestName = s.displayName();
+            }
+        }
+        int pages = Math.max(1, (largest + pageSize - 1) / pageSize);
+        check("【回归】分页能覆盖最大分类",
+                pages * pageSize >= largest,
+                largestName + " 有 " + largest + " 个物品 → " + pages + " 页 × " + pageSize + " 格");
+    }
+
+    // ------------------------------------------------------------------
+    // 15. 拆解归还（回归测试 · 防凭空造物）
+    // ------------------------------------------------------------------
+
+    /**
+     * 回归测试：拆掉机器必须归还「原来放下去的那个东西」。
+     *
+     * <p>早期版本无条件掉落自定义机器物品，于是出现了一条凭空造物路径：</p>
+     *
+     * <pre>
+     *   放 1 个【原版工作台】 -> 叠铁块+玻璃 -> 自动成型
+     *                        -> 挖掉控制器
+     *                        -> 掉落【自定义增强工作台】
+     * </pre>
+     *
+     * <p>原版工作台被凭空转换成了自定义物品，可无限重复。
+     * 正确行为是：用什么放的，就还回什么。</p>
+     */
+    private void testDismantleReturnsOriginal() {
+        section("拆解归还 (回归 · 防凭空造物)");
+
+        MachineDefinition definition = MachineRegistry.get().get("hrf_enhanced_crafting_table");
+        if (definition == null) {
+            check("增强工作台定义存在", false, "缺失");
+            return;
+        }
+
+        // ---- 1. 用普通方块搭出的机器：应归还普通方块 ----
+        World world = plugin.getServer().getWorlds().get(0);
+        Location base = new Location(world, 3100, 200, 3100);
+        try {
+            world.getChunkAt(base).load();
+        } catch (Exception ex) {
+            check("测试区块可加载", false, ex.toString());
+            return;
+        }
+
+        Block controller = base.getBlock();
+        Block body = base.clone().add(0, 1, 0).getBlock();
+        Block casing = base.clone().add(0, 2, 0).getBlock();
+        Material o1 = controller.getType();
+        Material o2 = body.getType();
+        Material o3 = casing.getType();
+
+        try {
+            controller.setType(Material.CRAFTING_TABLE, false);
+            body.setType(Material.IRON_BLOCK, false);
+            casing.setType(Material.GLASS, false);
+            plugin.machines().remove(base);
+
+            MachineInstance formed = com.koole.higherRedStoneFun.machines.StructureFormation
+                    .tryForm(plugin.machines(), base);
+
+            check("普通方块搭出的结构已成型", formed != null, formed == null ? "失败" : "成功");
+
+            if (formed != null) {
+                check("【关键】标记为「非自定义物品放置」",
+                        !formed.isPlacedAsMachineItem(),
+                        formed.isPlacedAsMachineItem()
+                                ? "标记错误 ✗（会导致原版工作台被变成自定义物品）"
+                                : "标记正确 ✓");
+
+                // 模拟拆解时的掉落决策
+                ItemStack drop = formed.isPlacedAsMachineItem()
+                        ? MachineRegistry.get().createItem(formed.id(), 1)
+                        : new ItemStack(controller.getType(), 1);
+
+                String droppedId = ItemRegistry.get().idOf(drop);
+                check("【关键】拆解归还原版工作台，而非自定义物品",
+                        drop.getType() == Material.CRAFTING_TABLE && droppedId == null,
+                        "掉落 " + drop.getType().name()
+                                + (droppedId == null ? "（原版）✓" : "（自定义 " + droppedId + "）✗ 凭空造物"));
+            }
+
+            plugin.machines().remove(base);
+
+            // ---- 2. 用自定义物品放置的机器：应归还自定义物品 ----
+            MachineInstance byItem = new MachineInstance(base, definition);
+            byItem.setPlacedAsMachineItem(true);
+            ItemStack dropByItem = byItem.isPlacedAsMachineItem()
+                    ? MachineRegistry.get().createItem(byItem.id(), 1)
+                    : new ItemStack(Material.CRAFTING_TABLE, 1);
+
+            check("自定义物品放置的机器归还自定义物品",
+                    "hrf_enhanced_crafting_table".equals(ItemRegistry.get().idOf(dropByItem)),
+                    "掉落 " + ItemRegistry.get().idOf(dropByItem) + " ✓");
+
+            // ---- 3. 默认值必须是「非自定义」（保守策略）----
+            MachineInstance fresh = new MachineInstance(base, definition);
+            check("默认标记为「非自定义物品」",
+                    !fresh.isPlacedAsMachineItem(),
+                    "默认 false ✓（宁可归还普通方块，也不凭空造物）");
+
+        } catch (Exception ex) {
+            check("拆解归还测试无异常", false, ex.toString());
+        } finally {
+            controller.setType(o1 == null ? Material.AIR : o1, false);
+            body.setType(o2 == null ? Material.AIR : o2, false);
+            casing.setType(o3 == null ? Material.AIR : o3, false);
+            plugin.machines().remove(base);
+        }
+    }
+
+    // ------------------------------------------------------------------
+    // 16. 连续破坏结构组件（回归测试）
+    // ------------------------------------------------------------------
+
+    /**
+     * 回归测试：挖掉<b>每一个</b>组件方块都必须有反馈。
+     *
+     * <p>早期版本只在「完整 -> 不完整」的瞬间提示一次。玩家先挖玻璃（有提示），
+     * 再挖铁块时 {@code wasComplete} 已经是 false，条件不成立，
+     * <b>于是完全没有反应</b>——玩家会以为「铁块根本不属于这个结构」。</p>
+     *
+     * <p>同时验证 {@code structureBlocks} 不会被永久清空
+     * （那会导致存档丢失结构坐标、无法重新判定）。</p>
+     */
+    private void testSequentialStructureDamage() {
+        section("连续破坏结构 (回归)");
+
+        MachineDefinition definition = MachineRegistry.get().get("hrf_enhanced_crafting_table");
+        if (definition == null || !definition.isMultiblock()) {
+            check("增强工作台是多方块", false, "未配置");
+            return;
+        }
+
+        World world = plugin.getServer().getWorlds().get(0);
+        Location base = new Location(world, 3120, 200, 3120);
+        try {
+            world.getChunkAt(base).load();
+        } catch (Exception ex) {
+            check("测试区块可加载", false, ex.toString());
+            return;
+        }
+
+        Block controller = base.getBlock();
+        Block body = base.clone().add(0, 1, 0).getBlock();
+        Block casing = base.clone().add(0, 2, 0).getBlock();
+        Material o1 = controller.getType();
+        Material o2 = body.getType();
+        Material o3 = casing.getType();
+
+        try {
+            controller.setType(Material.CRAFTING_TABLE, false);
+            body.setType(Material.IRON_BLOCK, false);
+            casing.setType(Material.GLASS, false);
+            plugin.machines().remove(base);
+
+            MachineInstance machine = com.koole.higherRedStoneFun.machines.StructureFormation
+                    .tryForm(plugin.machines(), base);
+            if (machine == null) {
+                check("结构已成型", false, "创建失败");
+                return;
+            }
+
+            check("初始状态为成型", machine.isStructureComplete(), "成型 ✓");
+            int blocksAfterForm = machine.structureBlocks().size();
+            check("成型后记录了组件坐标", blocksAfterForm == 2,
+                    blocksAfterForm + " 个组件");
+
+            // ---- 第一次挖：玻璃 ----
+            casing.setType(Material.AIR, false);
+            machine.recheckStructure();
+            boolean afterGlass = machine.isStructureComplete();
+            check("挖玻璃后判定为未成型", !afterGlass, "未成型 ✓");
+
+            String missing1 = definition.structure().describeMissing(base);
+            check("挖玻璃后能指出缺少什么", !missing1.isEmpty(), missing1);
+
+            // ---- 关键：组件坐标不能被永久清空 ----
+            int blocksAfterGlass = machine.structureBlocks().size();
+            check("【回归】挖玻璃后组件坐标仍被记录",
+                    blocksAfterGlass == 2,
+                    blocksAfterGlass + " 个组件（早期版本会被清成 0，导致无法恢复判定）");
+
+            // ---- 第二次挖：铁块。玩家必须在这次也收到反馈 ----
+            body.setType(Material.AIR, false);
+            machine.recheckStructure();
+            boolean afterIron = machine.isStructureComplete();
+            check("挖铁块后仍为未成型", !afterIron, "未成型 ✓");
+
+            String missing2 = definition.structure().describeMissing(base);
+            check("【回归】挖铁块后同样能指出缺少什么（而非静默无反应）",
+                    !missing2.isEmpty(),
+                    missing2.isEmpty() ? "无提示 ✗（玩家会以为铁块不属于结构）" : missing2);
+
+            // ---- 逐块补回：每补一块都应该能重新判定 ----
+            body.setType(Material.IRON_BLOCK, false);
+            machine.recheckStructure();
+            check("补回铁块后仍缺玻璃", !machine.isStructureComplete(),
+                    definition.structure().describeMissing(base));
+
+            casing.setType(Material.GLASS, false);
+            machine.recheckStructure();
+            check("补回玻璃后恢复成型", machine.isStructureComplete(), "恢复 ✓");
+
+            int finalBlocks = machine.structureBlocks().size();
+            check("恢复成型后组件坐标完整", finalBlocks == 2, finalBlocks + " 个组件");
+
+            plugin.machines().remove(base);
+
+        } catch (Exception ex) {
+            check("连续破坏测试无异常", false, ex.toString());
+        } finally {
+            controller.setType(o1 == null ? Material.AIR : o1, false);
+            body.setType(o2 == null ? Material.AIR : o2, false);
+            casing.setType(o3 == null ? Material.AIR : o3, false);
+            plugin.machines().remove(base);
+        }
     }
 
     // ------------------------------------------------------------------

@@ -18,10 +18,43 @@ import java.util.List;
  */
 public final class RecipeType {
 
-    /** 3x3 增强工作台：玩家手动摆放 9 格，产物从结果格取走，无需能源。 */
+    /**
+     * 增强工作台：54 格，左侧 3x3 输入、右侧 3x3 结果区、最右列放红石燃料。
+     *
+     * <p>槽位布局：</p>
+     * <pre>
+     *   列     1    2    3    4    5    6    7    8    9
+     *   行1   [框] [框] [框] [框] [框] [框] [框] [框] [燃]   <- 8 = 红石燃料槽
+     *   行2   [入] [入] [入] [框] [框] [出] [出] [出] [能]
+     *   行3   [入] [入] [入] [框] [框] [出] [出] [出] [能]
+     *   行4   [入] [入] [入] [框] [框] [出] [出] [出] [能]
+     *   行5   [框] [框] [框] [状] [框] [框] [框] [框] [能]
+     *   行6   [框] [框] [框] [框] [框] [框] [框] [框] [能]
+     * </pre>
+     *
+     * <p><b>注意</b>：早期版本只有 27 格，却把输入槽写成
+     * {@code {10,11,12,19,20,21,28,29,30}}——28/29/30 越界，被
+     * {@code MachineInstance.setSlot} 静默丢弃，导致「3x3 网格」实际只有
+     * 2x3 能用。现在格子数够了，9 格输入全部有效。</p>
+     */
     public static final RecipeType ENHANCED_CRAFTING = new RecipeType(
-            "enhanced_crafting", "增强工作台", 27, new int[]{16},
-            new int[]{10, 11, 12, 19, 20, 21, 28, 29, 30}, Material.CRAFTING_TABLE, false, false);
+            "enhanced_crafting", "增强工作台", 54, new int[]{24},
+            new int[]{9, 10, 11, 18, 19, 20, 27, 28, 29}, Material.CRAFTING_TABLE, false, false);
+
+    /** 增强工作台的完整结果区（3x3，主产物落在中心 24）。 */
+    public static final int[] CRAFTING_OUTPUT_AREA = {24, 14, 15, 16, 23, 25, 32, 33, 34};
+
+    /** 增强工作台的输入区（3x3）。 */
+    public static final int[] CRAFTING_INPUT_AREA = {9, 10, 11, 18, 19, 20, 27, 28, 29};
+
+    /** 增强工作台的红石燃料槽（最右列顶端）。 */
+    public static final int CRAFTING_FUEL_SLOT = 8;
+
+    /** 增强工作台右侧的能量显示列（燃料槽下方，自上而下）。 */
+    public static final int[] CRAFTING_ENERGY_COLUMN = {17, 26, 35, 44, 53};
+
+    /** 增强工作台的状态位（第五行第三列）。 */
+    public static final int CRAFTING_STATUS_SLOT = 39;
 
     /** 研磨：1 输入 -> 1~2 输出，燃料驱动。 */
     public static final RecipeType GRINDING = new RecipeType(

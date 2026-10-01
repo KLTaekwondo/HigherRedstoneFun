@@ -20,6 +20,18 @@ public final class Materials {
     public static void register() {
         ItemRegistry registry = ItemRegistry.get();
 
+        // ---------------- 工具与仪器 ----------------
+        // 图鉴说明书：随身携带，右键打开。这也是 TOOLS 分类里唯一的物品
+        // （否则那个分类在图鉴里是空的）。
+        registry.register(HrfItem.builder("hrf_guide", Material.BOOK,
+                        "<gold>科技图鉴", ItemGroup.TOOLS)
+                .lore("<gray>随身携带的机器与配方手册")
+                .blank()
+                .lore("<yellow>右键打开")
+                .lore("<dark_gray>也可以使用 /hrf guide")
+                .glow(true)
+                .build());
+
         // ---------------- 基础零件 ----------------
         registry.register(HrfItem.builder("hrf_iron_plate", Material.IRON_INGOT,
                         "<white>铁板", ItemGroup.MATERIALS)

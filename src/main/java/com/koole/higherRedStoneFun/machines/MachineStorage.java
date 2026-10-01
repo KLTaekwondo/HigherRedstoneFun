@@ -95,6 +95,20 @@ public final class MachineStorage {
         config.set(path + ".generated", machine.lifetimeGenerated());
         config.set(path + ".consumed", machine.lifetimeConsumed());
         config.set(path + ".completed", machine.completedOperations());
+
+        // 多方块结构：记录组件坐标，拆解时用于清理与归属判定
+        if (machine.definition().isMultiblock()) {
+            config.set(path + ".structureComplete", machine.isStructureComplete());
+            java.util.List<String> coords = new java.util.ArrayList<>();
+            for (Location block : machine.structureBlocks()) {
+                coords.add(block.getBlockX() + "_" + block.getBlockY() + "_" + block.getBlockZ());
+            }
+            config.set(path + ".structureBlocks", coords);
+        }
+
+        // 控制器来源：决定拆解时归还自定义物品还是普通方块。
+        // 必须持久化，否则重启后行为会翻转，导致原版工作台被变成自定义物品。
+        config.set(path + ".placedAsMachineItem", machine.isPlacedAsMachineItem());
         if (machine.owner() != null) {
             config.set(path + ".owner", machine.owner().toString());
             config.set(path + ".ownerName", machine.ownerName());
@@ -282,6 +296,27 @@ public final class MachineStorage {
                 machine.putCounterRaw(name, counters.getInt(name, 0));
             }
         }
+
+        // 恢复多方块结构状态
+        if (definition.isMultiblock()) {
+            java.util.List<Location> blocks = new java.util.ArrayList<>();
+            for (String coord : section.getStringList("structureBlocks")) {
+                try {
+                    String[] xyz = coord.split("_");
+                    blocks.add(new Location(world,
+                            Integer.parseInt(xyz[0]), Integer.parseInt(xyz[1]), Integer.parseInt(xyz[2])));
+                } catch (Exception ignored) {
+                    // 坐标损坏时忽略，稍后会重新检测
+                }
+            }
+            machine.setStructureBlocks(blocks);
+            // 不信任存档里的状态：以世界中的实际方块为准
+            machine.recheckStructure();
+        }
+
+        // 恢复控制器来源。默认 false（保守）：
+        // 若存档缺这个字段，宁可归还普通方块，也不要凭空造出自定义物品。
+        machine.setPlacedAsMachineItem(section.getBoolean("placedAsMachineItem", false));
 
         // 恢复物品栏
         ConfigurationSection inv = section.getConfigurationSection("inventory");

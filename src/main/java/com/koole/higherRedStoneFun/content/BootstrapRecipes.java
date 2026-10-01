@@ -32,6 +32,43 @@ public final class BootstrapRecipes {
     /** 原版配方键前缀，便于识别与清理。 */
     private static final String PREFIX = "vanilla_";
 
+    /**
+     * 引导物品的「原版工作台配方」说明。
+     *
+     * <p>这些物品不在 {@code RecipeRegistry} 里（它们用原版配方），
+     * 因此图鉴查不到它们的机器配方。没有这张表的话，图鉴会对它们
+     * 显示「没有找到配方」——而玩家其实完全可以在原版工作台做出来，
+     * 这会严重误导新手。</p>
+     */
+    private static final java.util.Map<String, java.util.List<String>> VANILLA_HINTS = java.util.Map.of(
+            "hrf_machine_frame", java.util.List.of(
+                    "<gray>在原版工作台中合成：",
+                    "<white>铁锭　铜锭　铁锭",
+                    "<white>铜锭　铁块　铜锭",
+                    "<white>铁锭　铜锭　铁锭"),
+            "hrf_copper_wire", java.util.List.of(
+                    "<gray>在原版工作台中合成（无序）：",
+                    "<white>1 铜锭 → 3 铜导线"),
+            "hrf_empty_sample", java.util.List.of(
+                    "<gray>在原版工作台中合成（无序）：",
+                    "<white>3 玻璃 → 3 空样本瓶"),
+            "hrf_guide", java.util.List.of(
+                    "<gray>在原版工作台中合成（无序）：",
+                    "<white>1 书 + 1 铜锭 → 科技图鉴",
+                    "",
+                    "<gray>右键打开，也可以用 <white>/hrf guide")
+    );
+
+    /** 返回该物品的原版工作台配方说明；不是引导物品则返回空列表。 */
+    public static java.util.List<String> vanillaHint(String itemId) {
+        return VANILLA_HINTS.getOrDefault(itemId, java.util.List.of());
+    }
+
+    /** 该物品是否是「只能用原版工作台制作」的引导物品。 */
+    public static boolean isVanillaOnly(String itemId) {
+        return VANILLA_HINTS.containsKey(itemId);
+    }
+
     private BootstrapRecipes() {
     }
 
@@ -62,15 +99,17 @@ public final class BootstrapRecipes {
 
         // ----------------------------------------------------------
         // 3. 增强工作台 —— 科技树的起点
-        //    用机器框架 + 工作台 + 铁锭围一圈
+        //
+        //     这里<b>故意没有配方</b>。
+        //
+        //     增强工作台是多方块结构，而且它的结构用的全是原版方块
+        //     （工作台 + 铁块 + 玻璃）。既然玩家直接搭就能成型，
+        //     再给一个「先合成物品、再放下、再搭结构」的配方就是多余的门槛——
+        //     图鉴里也会同时显示「合成配方」和「多方块结构」，
+        //     看起来像要求做两件事。
+        //
+        //     所以它的获取方式就是结构本身：放一个工作台，上面叠铁块与玻璃。
         // ----------------------------------------------------------
-        ShapedRecipe table = new ShapedRecipe(
-                key(plugin, "enhanced_crafting_table"), registry.create("hrf_enhanced_crafting_table", 1));
-        table.shape("III", "CFC", "III");
-        table.setIngredient('I', Material.IRON_INGOT);
-        table.setIngredient('C', Material.CRAFTING_TABLE);
-        table.setIngredient('F', RecipeChoice.exactChoice(registry.create("hrf_machine_frame", 1)));
-        add(plugin, table);
 
         // ----------------------------------------------------------
         // 4. 空样本瓶 —— 基因玩法的起点
@@ -81,13 +120,22 @@ public final class BootstrapRecipes {
         sample.addIngredient(3, Material.GLASS);
         add(plugin, sample);
 
-        plugin.getLogger().info("已注册 " + 4 + " 条引导配方（原版工作台可用）。");
+        // ----------------------------------------------------------
+        // 5. 科技图鉴 —— 随身携带的说明书
+        //    1 书 + 1 铜锭（无序）
+        // ----------------------------------------------------------
+        ShapelessRecipe guide = new ShapelessRecipe(
+                key(plugin, "guide"), registry.create("hrf_guide", 1));
+        guide.addIngredient(Material.BOOK);
+        guide.addIngredient(Material.COPPER_INGOT);
+        add(plugin, guide);
+
+        plugin.getLogger().info("已注册 " + 5 + " 条引导配方（原版工作台可用）。");
     }
 
     /** 移除全部引导配方（重载时先清后加，避免重复注册抛异常）。 */
     public static void unregister(HigherRedStoneFun plugin) {
-        for (String name : new String[]{"machine_frame", "copper_wire",
-                "enhanced_crafting_table", "empty_sample"}) {
+        for (String name : new String[]{"machine_frame", "copper_wire", "empty_sample", "guide"}) {
             plugin.getServer().removeRecipe(key(plugin, name));
         }
     }

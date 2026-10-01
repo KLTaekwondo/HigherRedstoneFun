@@ -80,7 +80,7 @@ public final class HrfCommand implements TabExecutor {
             sender.sendMessage(Text.prefixed("<red>该命令只能由玩家使用"));
             return;
         }
-        new GuideMenu().open(player, ItemGroup.BASIC_MACHINES);
+        new GuideMenu().openMain(player);
     }
 
     private void give(CommandSender sender, String[] args) {

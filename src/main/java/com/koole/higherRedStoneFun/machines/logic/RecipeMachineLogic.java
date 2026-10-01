@@ -29,16 +29,28 @@ import java.util.concurrent.ThreadLocalRandom;
  */
 public class RecipeMachineLogic implements MachineLogic {
 
-    /** 燃料槽在所有配方机器中的统一位置。 */
+    /** 燃料槽的默认位置（研磨/压制/熔炼等 27 格机器）。 */
     public static final int FUEL_SLOT = 0;
 
     private final boolean electric;
     /** 每 tick 耗电（电力机器）。 */
     private final long energyPerTick;
+    /** 本机器燃料槽的位置。增强工作台布局不同，需要覆盖。 */
+    private final int fuelSlot;
 
     public RecipeMachineLogic(boolean electric, long energyPerTick) {
+        this(electric, energyPerTick, FUEL_SLOT);
+    }
+
+    public RecipeMachineLogic(boolean electric, long energyPerTick, int fuelSlot) {
         this.electric = electric;
         this.energyPerTick = Math.max(0L, energyPerTick);
+        this.fuelSlot = Math.max(0, fuelSlot);
+    }
+
+    /** 本机器的燃料槽位置。 */
+    public int fuelSlot() {
+        return fuelSlot;
     }
 
     /** 该机器是否耗电。 */
@@ -285,7 +297,7 @@ public class RecipeMachineLogic implements MachineLogic {
 
     /** 尝试从燃料槽消耗一个燃料物品，成功返回 true。 */
     protected boolean consumeFuelItem(MachineInstance machine) {
-        ItemStack fuel = machine.getSlot(FUEL_SLOT);
+        ItemStack fuel = machine.getSlot(fuelSlot);
         if (fuel == null || fuel.getType().isAir()) {
             return false;
         }
@@ -295,7 +307,7 @@ public class RecipeMachineLogic implements MachineLogic {
         }
         ItemStack copy = fuel.clone();
         copy.setAmount(copy.getAmount() - 1);
-        machine.setSlot(FUEL_SLOT, copy.getAmount() <= 0 ? null : copy);
+        machine.setSlot(fuelSlot, copy.getAmount() <= 0 ? null : copy);
         machine.addFuelTicks(ticks);
         return true;
     }

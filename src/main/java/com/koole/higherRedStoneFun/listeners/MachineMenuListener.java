@@ -139,7 +139,11 @@ public final class MachineMenuListener implements Listener {
         }
         ItemStack result = logic.takeResult(machine);
         if (result == null) {
-            // 配方不成立（材料被改动过），刷新掉过期的预览
+            // 配方不成立，或结构未成型导致精密零件被锁定
+            String reason = logic.failureReason(machine);
+            if (reason != null) {
+                player.sendMessage(Text.prefixed("<red>" + reason));
+            }
             menu.renderPreview();
             return;
         }

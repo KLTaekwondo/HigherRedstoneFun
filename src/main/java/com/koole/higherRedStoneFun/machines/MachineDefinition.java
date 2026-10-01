@@ -26,6 +26,7 @@ public final class MachineDefinition {
     private final int inventorySize;
     private final MachineLogic logic;
     private final boolean glow;
+    private final StructurePattern structure;
     private final String[] lore;
 
     private MachineDefinition(Builder b) {
@@ -42,6 +43,7 @@ public final class MachineDefinition {
         this.inventorySize = b.inventorySize;
         this.logic = b.logic;
         this.glow = b.glow;
+        this.structure = b.structure;
         this.lore = b.lore.toArray(new String[0]);
     }
 
@@ -108,6 +110,20 @@ public final class MachineDefinition {
         return glow;
     }
 
+    /**
+     * 多方块结构需求，null 表示这台机器是单方块。
+     *
+     * <p>结构成型时机器会获得额外能力（由 {@link MachineLogic} 自行判断）。</p>
+     */
+    public StructurePattern structure() {
+        return structure;
+    }
+
+    /** 这台机器是否有结构需求。 */
+    public boolean isMultiblock() {
+        return structure != null;
+    }
+
     public String[] lore() {
         return lore.clone();
     }
@@ -131,6 +147,7 @@ public final class MachineDefinition {
         private int inventorySize = -1;
         private MachineLogic logic = MachineLogic.NONE;
         private boolean glow;
+        private StructurePattern structure;
         private final java.util.List<String> lore = new java.util.ArrayList<>();
 
         private Builder(String id, String displayName, ItemGroup group, Material icon) {
@@ -187,6 +204,17 @@ public final class MachineDefinition {
         /** 标记为高阶机器：生成的物品会带附魔光效。 */
         public Builder glow(boolean value) {
             this.glow = value;
+            return this;
+        }
+
+        /**
+         * 声明这台机器需要多方块结构。
+         *
+         * <p>结构成型时 {@link MachineInstance#isStructureComplete()} 为 true，
+         * 机器逻辑据此提供额外能力。</p>
+         */
+        public Builder structure(StructurePattern pattern) {
+            this.structure = pattern;
             return this;
         }
 
